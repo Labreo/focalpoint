@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js & Build Output
+.next/
+out/
+build/
+dist/
+.turbo/
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+.eggs/
+
+# AWS SAM & Serverless
+.aws-sam/
+.serverless/
+
+# Environment Variables & Secrets
+.env
+.env*.local
+*.pem
+*.key
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+[Dd]s_[Ss]tore
+.ds_store
+Thumbs.db
+
+# Strictly Banned HTML Files (Repo Hygiene Rule)
+*.html
+
+# Logs & Debugging
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
