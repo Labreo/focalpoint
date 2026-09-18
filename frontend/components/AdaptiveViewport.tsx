@@ -9,7 +9,8 @@ import {
 } from '../types';
 import { GazeReticle } from './GazeReticle';
 import { computePathologyTransform } from '../lib/pathology_transforms';
-import { Pin, Type, User, BarChart2 } from 'lucide-react';
+import { WebGLShaderPipeline, ShaderRenderOptions } from '../lib/webgl_shader_pipeline';
+import { Pin, Type, User, BarChart2, Cpu, Sparkles } from 'lucide-react';
 
 interface AdaptiveViewportProps {
   videoSrc?: string | null;
@@ -52,45 +53,106 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pipelineRef = useRef<WebGLShaderPipeline | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(true);
+  const [useWebGL, setUseWebGL] = useState<boolean>(true);
+  const [webGLActive, setWebGLActive] = useState<boolean>(false);
+  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 1280, height: 720 });
 
-  // Notify parent of container rect for exact gaze coordinate transformation
-  useEffect(() => {
-    const reportRect = () => {
-      if (containerRef.current && onContainerRectChange) {
-        onContainerRectChange(containerRef.current.getBoundingClientRect());
-      }
-    };
-    reportRect();
-    window.addEventListener('resize', reportRect);
-    window.addEventListener('scroll', reportRect);
-    return () => {
-      window.removeEventListener('resize', reportRect);
-      window.removeEventListener('scroll', reportRect);
-    };
-  }, [onContainerRectChange]);
-
-  // Notify parent of active video source for frame capture
-  useEffect(() => {
-    if (onSourceRef && videoRef.current) {
-      onSourceRef(videoRef.current);
-    }
-  }, [videoSrc, mediaStream, onSourceRef]);
-
-  const [viewportSize, setViewportSize] = useState({ width: 1280, height: 720 });
-
+  // Measure container rect & viewport dimensions
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         setViewportSize({ width: rect.width, height: rect.height });
+        if (onContainerRectChange) {
+          onContainerRectChange(rect);
+        }
       }
     };
     updateSize();
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    window.addEventListener('scroll', updateSize);
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      window.removeEventListener('scroll', updateSize);
+    };
+  }, [onContainerRectChange]);
+
+  // Initialize WebGL GPU Fragment Shader Pipeline
+  useEffect(() => {
+    if (canvasRef.current && !pipelineRef.current) {
+      try {
+        pipelineRef.current = new WebGLShaderPipeline(canvasRef.current);
+        setWebGLActive(true);
+      } catch (err) {
+        console.warn('WebGL initialization failed, falling back to Canvas2D/CSS:', err);
+        setWebGLActive(false);
+      }
+    }
+    return () => {
+      if (pipelineRef.current) {
+        pipelineRef.current.destroy();
+        pipelineRef.current = null;
+      }
+    };
   }, []);
+
+  // 60 FPS GPU Fragment Shader Render Loop
+  useEffect(() => {
+    let active = true;
+
+    const renderLoop = () => {
+      if (!active) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const pipeline = pipelineRef.current;
+
+      if (useWebGL && webGLActive && video && canvas && pipeline && video.readyState >= 2) {
+        try {
+          if (video.videoWidth > 0 && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+          }
+
+          const options: ShaderRenderOptions = {
+            pathologyType: activePathology.type as any,
+            gazeX: Math.max(0, Math.min(1, gazePoint.x / Math.max(1, viewportSize.width))),
+            gazeY: Math.max(0, Math.min(1, gazePoint.y / Math.max(1, viewportSize.height))),
+            contrastBoost: activePathology.type === 'LOW_ACUITY' ? 1.65 : 1.15,
+            scotomaRadius: (activePathology.scotomaRadiusPx || 110) / Math.max(1, viewportSize.width),
+            tunnelRadius: (activePathology.tunnelRadiusPx || 220) / Math.max(1, viewportSize.width),
+            gamma: 0.55,
+            isSimulatorActive: simulatorActive
+          };
+
+          pipeline.render(video, options);
+        } catch {}
+      }
+
+      animFrameRef.current = requestAnimationFrame(renderLoop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(renderLoop);
+
+    return () => {
+      active = false;
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, [useWebGL, webGLActive, activePathology, gazePoint, viewportSize, simulatorActive]);
+
+  // Notify parent of active video source for frame capture
+  useEffect(() => {
+    if (onSourceRef) {
+      onSourceRef(useWebGL && webGLActive && canvasRef.current ? canvasRef.current : videoRef.current);
+    }
+  }, [videoSrc, mediaStream, onSourceRef, useWebGL, webGLActive]);
 
   // Connect WebRTC mediaStream or videoSrc to HTML5 video element
   useEffect(() => {
@@ -163,25 +225,32 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
       onPointerMove={handlePointerMove}
       className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-black select-none shadow-2xl"
       style={{
-        transform: simulatorActive ? pathologyTransform.viewportTransform : undefined,
+        transform: simulatorActive && (!useWebGL || !webGLActive) ? pathologyTransform.viewportTransform : undefined,
         transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)'
       }}
     >
-      {/* Real HTML5 Video Player */}
+      {/* Real HTML5 Video Player (Serves as WebGL Texture Source or Fallback Renderer) */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         loop
         muted={isMuted}
-        className="h-full w-full object-contain"
+        crossOrigin="anonymous"
+        className={`h-full w-full object-contain ${useWebGL && webGLActive ? 'hidden' : 'block'}`}
         style={{
           filter: simulatorActive ? pathologyTransform.canvasFilter : undefined
         }}
       />
 
-      {/* Pathology Mask Overlay (Central Scotoma or Tunnel Vision Mask - only in Simulator Mode) */}
-      {simulatorActive && pathologyTransform.maskOverlay && (
+      {/* WebGL 2.0 / 1.0 GPU Fragment Shader Canvas (Anamorphic Radial Compression, 3x3 Laplacian Sharpening, Gaussian Scotoma) */}
+      <canvas
+        ref={canvasRef}
+        className={`h-full w-full object-contain ${useWebGL && webGLActive ? 'block' : 'hidden'}`}
+      />
+
+      {/* Pathology Mask Overlay (Fallback when WebGL is inactive) */}
+      {simulatorActive && (!useWebGL || !webGLActive) && pathologyTransform.maskOverlay && (
         <div
           className="pointer-events-none absolute inset-0 z-10"
           style={{
@@ -271,7 +340,20 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
       </div>
 
       {/* Video Overlay Playback Controls */}
-      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-lg bg-black/75 px-2.5 py-1.5 text-xs text-white backdrop-blur-md border border-white/10">
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-lg bg-black/80 px-2.5 py-1.5 text-xs text-white backdrop-blur-md border border-white/10">
+        <button
+          onClick={() => setUseWebGL(prev => !prev)}
+          className={`flex items-center gap-1 rounded px-2 py-1 font-mono text-[11px] font-bold transition ${
+            useWebGL && webGLActive 
+              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40' 
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+          }`}
+          title="Toggle WebGL GPU Fragment Shader Pipeline"
+        >
+          <Cpu className="h-3 w-3" />
+          <span>{useWebGL && webGLActive ? 'GPU Shader: ON' : 'GPU Shader: OFF'}</span>
+        </button>
+
         <button
           onClick={togglePlay}
           className="rounded px-2 py-1 font-bold hover:bg-white/20 transition text-slate-200"

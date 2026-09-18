@@ -103,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Mode Switch: Eye Tracker vs Mouse Debug */}
+          {/* Dual Input Mode: Biometric Iris vs Ergonomic Motor Assist */}
           {onToggleInputMode && (
             <button
               onClick={onToggleInputMode}
@@ -112,16 +112,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
                   : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
               }`}
-              title={inputMode === 'EYE_TRACKER' ? 'Using real webcam eye tracking' : 'Using mouse debug surrogate'}
+              title={
+                inputMode === 'EYE_TRACKER'
+                  ? 'Active: Biometric Iris Gaze Tracker (TensorFlow FaceMesh + 2D Kalman filter)'
+                  : 'Active: Ergonomic Motor Assistive Mode (Alternative Input for tremors/nystagmus)'
+              }
             >
               {inputMode === 'EYE_TRACKER' ? (
                 <>
-                  <span>👁️ Iris Mode</span>
+                  <span>👁️ Biometric Iris</span>
                 </>
               ) : (
                 <>
                   <MousePointer className="h-3 w-3 text-amber-400" />
-                  <span>Mouse Mode</span>
+                  <span>♿ Ergonomic Motor</span>
                 </>
               )}
             </button>

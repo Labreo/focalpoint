@@ -28,6 +28,10 @@ interface AccessibleReaderPanelProps {
   onTriggerAwsAnalysis: () => void;
   isAnalyzing: boolean;
   awsLatencyMs?: number;
+  autoSyncAWS?: boolean;
+  onToggleAutoSyncAWS?: () => void;
+  lastSyncReason?: string;
+  lastDelta?: number;
 }
 
 export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
@@ -40,7 +44,11 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
   onUnpinHUD,
   onTriggerAwsAnalysis,
   isAnalyzing,
-  awsLatencyMs
+  awsLatencyMs,
+  autoSyncAWS = true,
+  onToggleAutoSyncAWS,
+  lastSyncReason = 'Standby',
+  lastDelta = 0
 }) => {
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [autoSpeak, setAutoSpeak] = useState<boolean>(false);
@@ -324,6 +332,30 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
 
       {/* Bottom Action: Deep AWS Vision Trigger */}
       <div className="mt-4 border-t border-slate-800 pt-3">
+        {/* Autonomous Edge Engine Telemetry */}
+        <div className="mb-2 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${autoSyncAWS ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span className="font-mono text-[11px] text-slate-300">Edge Δ Engine</span>
+            <span className="font-mono text-[10px] text-amber-400">
+              Δ: {((lastDelta || 0) * 100).toFixed(1)}%
+            </span>
+          </div>
+          {onToggleAutoSyncAWS && (
+            <button
+              onClick={onToggleAutoSyncAWS}
+              className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold transition ${
+                autoSyncAWS 
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+              title="Toggle Autonomous AWS Differential Ingestion"
+            >
+              {autoSyncAWS ? 'AUTO: ON' : 'AUTO: OFF'}
+            </button>
+          )}
+        </div>
+
         <button
           onClick={onTriggerAwsAnalysis}
           disabled={isAnalyzing}
@@ -334,8 +366,8 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
         </button>
 
         <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-slate-500">
-          <span>Amazon Rekognition + Bedrock</span>
-          <span>Latency: {awsLatencyMs || 220}ms</span>
+          <span className="truncate max-w-[170px]" title={lastSyncReason}>Sync: {lastSyncReason}</span>
+          <span>AWS: {awsLatencyMs || 220}ms</span>
         </div>
       </div>
     </aside>

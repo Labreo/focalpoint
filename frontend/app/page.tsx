@@ -14,6 +14,7 @@ import { KinematicIntentClassifier } from '../lib/eye_kinematics';
 import { audioHaptics } from '../lib/synthetic_audio';
 import { webGazerManager } from '../lib/webgazer_adapter';
 import { focalPointClient } from '../lib/aws_client';
+import { TemporalDifferentialEngine } from '../lib/differential_engine';
 import { Navbar } from '../components/Navbar';
 import { StreamSourceSelector, StreamMode } from '../components/StreamSourceSelector';
 import { AdaptiveViewport } from '../components/AdaptiveViewport';
@@ -31,7 +32,8 @@ import {
   Cloud, 
   CheckCircle2, 
   ArrowRight, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Zap
 } from 'lucide-react';
 
 const DEFAULT_PATHOLOGY: PathologyConfig = {
@@ -82,6 +84,13 @@ export default function AdaptiveViewerPage() {
   const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
+  // Edge-Computed Temporal Differential Engine State
+  const diffEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.12, 6000));
+  const [autoSyncAWS, setAutoSyncAWS] = useState<boolean>(true);
+  const [lastSyncReason, setLastSyncReason] = useState<string>('Initialization');
+  const [lastDelta, setLastDelta] = useState<number>(0);
+  const [isSceneChanging, setIsSceneChanging] = useState<boolean>(false);
+
   // Math references (persist across renders)
   const kalmanFilterRef = useRef<GazeKalmanFilter2D>(new GazeKalmanFilter2D(0.08, 18.0));
   const intentClassifierRef = useRef<KinematicIntentClassifier>(
@@ -123,17 +132,19 @@ export default function AdaptiveViewerPage() {
       const url = URL.createObjectURL(customFile);
       setVideoSrc(url);
       setCurrentDemoScene(null);
-      // Generic regions for custom video
       setSemanticRegions([
         {
-          id: 'custom_video_focus',
+          id: 'custom_video_scan',
           type: 'TEXT_BLOCK',
-          confidence: 0.95,
-          boundingBox: { left: 0.05, top: 0.75, width: 0.90, height: 0.18 },
-          textContent: `Uploaded Video: ${customFile.name} — Look or hover here to inspect text and hear audio.`,
+          confidence: 0.99,
+          boundingBox: { left: 0.05, top: 0.78, width: 0.90, height: 0.16 },
+          textContent: `Ingesting "${customFile.name}" via Amazon Rekognition & Bedrock Claude 3.5 Sonnet... Look or click here.`,
           adaptationStrategy: { action: 'DYNAMIC_REFLOW' }
         }
       ]);
+      setTimeout(() => {
+        handleTriggerAwsAnalysis('INITIAL_FRAME', 1.0);
+      }, 500);
     } else if (mode === 'SCREEN_CAPTURE') {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
@@ -146,7 +157,19 @@ export default function AdaptiveViewerPage() {
         setMediaStream(stream);
         setVideoSrc(null);
         setCurrentDemoScene(null);
-        setSemanticRegions(DEMO_SCENES[0].regions);
+        setSemanticRegions([
+          {
+            id: 'screen_capture_scan',
+            type: 'TEXT_BLOCK',
+            confidence: 0.99,
+            boundingBox: { left: 0.05, top: 0.05, width: 0.90, height: 0.12 },
+            textContent: 'Live Screen Share Active: Decomposing viewport with Amazon Rekognition OCR...',
+            adaptationStrategy: { action: 'DYNAMIC_REFLOW' }
+          }
+        ]);
+        setTimeout(() => {
+          handleTriggerAwsAnalysis('INITIAL_FRAME', 1.0);
+        }, 600);
       } catch {
         handleSelectStreamMode('DEMO_CRICKET');
       }
@@ -253,7 +276,7 @@ export default function AdaptiveViewerPage() {
   }, []);
 
   // Trigger Live Deep AWS Vision Analysis (Rekognition + Bedrock Claude)
-  const handleTriggerAwsAnalysis = async () => {
+  const handleTriggerAwsAnalysis = useCallback(async (triggerReason: string = 'manual_inspection', deltaValue: number = 0) => {
     const video = activeVideoRef.current;
     if (!video || isAnalyzing) return;
 
@@ -276,6 +299,10 @@ export default function AdaptiveViewerPage() {
           ctx.drawImage(video, 0, 0, width, height);
           base64Jpeg = tempCanvas.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
         }
+      } else if (video instanceof HTMLCanvasElement && video.width > 0) {
+        width = video.width;
+        height = video.height;
+        base64Jpeg = video.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
       }
 
       if (base64Jpeg) {
@@ -284,13 +311,21 @@ export default function AdaptiveViewerPage() {
           width,
           height,
           'usr_kanak_001',
-          'manual_inspection'
+          triggerReason
         );
 
         if (result.regions && result.regions.length > 0) {
           setSemanticRegions(result.regions);
         }
         setAwsLatencyMs(result.processingLatencyMs || Math.round(performance.now() - t0));
+        const formattedReason = triggerReason === 'SCENE_DELTA' 
+          ? 'Scene Delta' 
+          : triggerReason === 'TIMEOUT_KEEPALIVE' 
+            ? 'Keepalive' 
+            : triggerReason === 'INITIAL_FRAME' 
+              ? 'Initial Scan' 
+              : 'Manual';
+        setLastSyncReason(`${formattedReason} (${(deltaValue * 100).toFixed(1)}%)`);
       }
     } catch (err) {
       console.warn('AWS Analysis invocation error:', err);
@@ -298,7 +333,32 @@ export default function AdaptiveViewerPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  };
+  }, [isAnalyzing]);
+
+  // Edge-Computed Temporal Differential Ingestion Loop (1.6 FPS)
+  useEffect(() => {
+    if (!autoSyncAWS) return;
+
+    const interval = setInterval(() => {
+      const source = activeVideoRef.current;
+      if (!source || isAnalyzing) return;
+
+      if (source instanceof HTMLVideoElement) {
+        if (source.paused || source.ended || source.readyState < 2) return;
+      }
+
+      const evalResult = diffEngineRef.current.evaluateFrame(source);
+      setLastDelta(evalResult.delta);
+
+      if (evalResult.shouldAnalyze) {
+        setIsSceneChanging(true);
+        setTimeout(() => setIsSceneChanging(false), 1200);
+        handleTriggerAwsAnalysis(evalResult.reason, evalResult.delta);
+      }
+    }, 600);
+
+    return () => clearInterval(interval);
+  }, [autoSyncAWS, isAnalyzing, handleTriggerAwsAnalysis]);
 
   // Pin & Unpin HUD widgets
   const handlePinHUD = (region: SemanticRegion) => {
@@ -354,13 +414,21 @@ export default function AdaptiveViewerPage() {
           />
 
           {/* Quick status pill */}
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span>60 FPS WebGL</span>
+              <span>60 FPS WebGL GPU</span>
             </span>
             <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
               <span>Gaze: {gazeLatencyMs}ms</span>
+            </span>
+            <span className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs transition ${
+              isSceneChanging
+                ? 'border-amber-400 bg-amber-400/20 text-amber-300 animate-pulse'
+                : 'border-slate-800 bg-slate-900 text-slate-400'
+            }`}>
+              <Zap className="h-3 w-3 text-amber-400" />
+              <span>Edge Δ: {(lastDelta * 100).toFixed(1)}%</span>
             </span>
             <span className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs ${
               isCalibrated 
@@ -409,7 +477,7 @@ export default function AdaptiveViewerPage() {
                     ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
                     : 'bg-cyan-400/20 text-cyan-300 border border-cyan-400/30'
                 }`}>
-                  {inputMode === 'EYE_TRACKER' ? '👁️ Webcam Iris Mode' : '🖱️ Mouse Debug Mode'}
+                  {inputMode === 'EYE_TRACKER' ? '👁️ Webcam Iris Mode' : '🖱️ Ergonomic Motor Mode'}
                 </span>
                 <span className="font-mono text-slate-300">
                   Target: {activeFocusedRegion ? activeFocusedRegion.textContent?.slice(0, 45) + '...' : 'None (Searching gaze)'}
@@ -421,7 +489,7 @@ export default function AdaptiveViewerPage() {
                 <span className={isCalibrated ? 'text-emerald-400' : 'text-amber-400'}>
                   {isCalibrated ? '● Calibrated' : '○ Uncalibrated'}
                 </span>
-                <span className="text-amber-400">AWS Sync: Active</span>
+                <span className="text-amber-400">AWS: {lastSyncReason}</span>
               </div>
             </div>
           </div>
@@ -436,9 +504,13 @@ export default function AdaptiveViewerPage() {
               onFontScaleChange={(scale) => setFontScale(scale)}
               pinnedRegions={pinnedHUDRegions}
               onUnpinHUD={handleUnpinHUD}
-              onTriggerAwsAnalysis={handleTriggerAwsAnalysis}
+              onTriggerAwsAnalysis={() => handleTriggerAwsAnalysis('manual_inspection', lastDelta)}
               isAnalyzing={isAnalyzing}
               awsLatencyMs={awsLatencyMs}
+              autoSyncAWS={autoSyncAWS}
+              onToggleAutoSyncAWS={() => setAutoSyncAWS(p => !p)}
+              lastSyncReason={lastSyncReason}
+              lastDelta={lastDelta}
             />
           </div>
         </div>
