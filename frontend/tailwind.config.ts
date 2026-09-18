@@ -9,8 +9,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: '#050811',
-        card: 'rgba(15, 23, 42, 0.85)',
+        canvas: '#0c0d10',
+        card: 'rgba(21, 22, 27, 0.88)',
+        bg: '#0c0d10',
+        'bg-1': '#15161b',
+        'bg-2': '#212228',
+        'bg-3': '#32333d',
+        fg: '#f4f4f5',
+        muted: '#a1a1aa',
         amber: {
           highlight: '#FDE047',
           glow: 'rgba(253, 224, 71, 0.25)',
@@ -26,10 +32,13 @@ const config: Config = {
       },
       fontFamily: {
         atkinson: ['"Atkinson Hyperlegible"', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       animation: {
         'pulse-subtle': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'spin-snapped': 'spin 4s steps(24) infinite',
+        'flicker-in': 'flicker-in .35s steps(1) 1',
+        'grid-scroll': 'grid-scroll 16s linear infinite',
       }
     },
   },

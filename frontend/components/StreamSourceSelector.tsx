@@ -18,82 +18,82 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
   isStreaming
 }) => {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-1.5 backdrop-blur-md">
-      <span className="px-2 font-atkinson text-xs font-bold uppercase tracking-wider text-slate-400">
-        Media Stream:
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-bg-3 bg-bg-1 p-1 font-telemetry">
+      <span className="px-2 text-xs font-bold text-muted uppercase tracking-wider">
+        // FEED:
       </span>
 
       {/* Demo 1: Cricket */}
       <button
         onClick={() => onSelectMode('DEMO_CRICKET')}
-        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-atkinson text-xs font-bold transition ${
+        className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition ${
           currentMode === 'DEMO_CRICKET'
-            ? 'bg-amber-highlight text-slate-950 shadow-md shadow-amber-300/30'
-            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+            ? 'bg-amber-highlight text-bg shadow-sm font-black'
+            : 'text-fg hover:bg-bg-2 hover:underline'
         }`}
         aria-pressed={currentMode === 'DEMO_CRICKET'}
       >
-        <Trophy className="h-3.5 w-3.5" />
-        <span>Cricket Match</span>
+        <Trophy className="h-3 w-3" />
+        <span>Cricket</span>
       </button>
 
       {/* Demo 2: Lecture */}
       <button
         onClick={() => onSelectMode('DEMO_LECTURE')}
-        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-atkinson text-xs font-bold transition ${
+        className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition ${
           currentMode === 'DEMO_LECTURE'
-            ? 'bg-amber-highlight text-slate-950 shadow-md shadow-amber-300/30'
-            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+            ? 'bg-amber-highlight text-bg shadow-sm font-black'
+            : 'text-fg hover:bg-bg-2 hover:underline'
         }`}
         aria-pressed={currentMode === 'DEMO_LECTURE'}
       >
-        <BookOpen className="h-3.5 w-3.5" />
-        <span>Medical Lecture</span>
+        <BookOpen className="h-3 w-3" />
+        <span>Lecture</span>
       </button>
 
       {/* Demo 3: News */}
       <button
         onClick={() => onSelectMode('DEMO_NEWS')}
-        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-atkinson text-xs font-bold transition ${
+        className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition ${
           currentMode === 'DEMO_NEWS'
-            ? 'bg-amber-highlight text-slate-950 shadow-md shadow-amber-300/30'
-            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+            ? 'bg-amber-highlight text-bg shadow-sm font-black'
+            : 'text-fg hover:bg-bg-2 hover:underline'
         }`}
         aria-pressed={currentMode === 'DEMO_NEWS'}
       >
-        <Newspaper className="h-3.5 w-3.5" />
-        <span>Breaking News</span>
+        <Newspaper className="h-3 w-3" />
+        <span>News</span>
       </button>
 
-      <div className="h-4 w-px bg-white/20" />
+      <span className="text-bg-3">\\</span>
 
       {/* Live Screen Share (YouTube / Video / TV) */}
       <button
         onClick={() => onSelectMode('SCREEN_CAPTURE')}
-        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-atkinson text-xs font-bold transition ${
+        className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition ${
           currentMode === 'SCREEN_CAPTURE'
-            ? 'bg-cyan-highlight text-slate-950 shadow-md shadow-cyan-300/30'
-            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+            ? 'bg-cyan-highlight text-bg shadow-sm font-black'
+            : 'text-cyan-highlight hover:bg-bg-2 hover:underline'
         }`}
         title="Share any Chrome tab playing a real YouTube video or remote stream"
         aria-pressed={currentMode === 'SCREEN_CAPTURE'}
       >
-        <Monitor className="h-3.5 w-3.5" />
-        <span>Screen Share (YouTube / Video)</span>
+        <Monitor className="h-3 w-3" />
+        <span>Screen Share (YouTube)</span>
       </button>
 
       {/* Webcam */}
       <button
         onClick={() => onSelectMode('WEBCAM')}
-        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-atkinson text-xs font-bold transition ${
+        className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold transition ${
           currentMode === 'WEBCAM'
-            ? 'bg-cyan-highlight text-slate-950 shadow-md shadow-cyan-300/30'
-            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+            ? 'bg-cyan-highlight text-bg shadow-sm font-black'
+            : 'text-fg hover:bg-bg-2 hover:underline'
         }`}
         aria-pressed={currentMode === 'WEBCAM'}
       >
-        <Camera className="h-3.5 w-3.5" />
-        <span>Webcam Feed</span>
+        <Camera className="h-3 w-3" />
+        <span>Webcam</span>
       </button>
     </div>
   );

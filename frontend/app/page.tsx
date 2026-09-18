@@ -15,6 +15,7 @@ import { audioHaptics } from '../lib/synthetic_audio';
 import { webGazerManager } from '../lib/webgazer_adapter';
 import { TemporalDifferentialEngine } from '../lib/differential_engine';
 import { focalPointClient } from '../lib/aws_client';
+import { animeTransitions } from '../lib/anime_transitions';
 import { TelemetryBar } from '../components/TelemetryBar';
 import { StreamSourceSelector, StreamMode } from '../components/StreamSourceSelector';
 import { AdaptiveViewport } from '../components/AdaptiveViewport';
@@ -409,7 +410,7 @@ export default function AdaptiveViewerPage() {
   const themeClass = `theme-${contrastPreset.toLowerCase()}`;
 
   return (
-    <main className={`relative flex h-screen w-screen flex-col overflow-hidden bg-canvas ${themeClass}`}>
+    <main className={`relative flex h-screen w-screen flex-col overflow-hidden bg-bg text-fg crt bg-grid bg-fixed ${themeClass}`}>
       {/* Screen Reader ARIA Live Announcer */}
       <div 
         id="focalpoint-announcer" 
@@ -437,18 +438,18 @@ export default function AdaptiveViewerPage() {
       />
 
       {/* Stream Source Selector Sub-Bar */}
-      <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/60 px-4 py-2">
+      <div className="flex items-center justify-between border-b border-bg-3 bg-bg/85 px-4 py-1.5 font-telemetry">
         <StreamSourceSelector
           currentMode={streamMode}
           onSelectMode={handleSelectStreamMode}
           isStreaming={!!mediaStream}
         />
 
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-muted">
           {streamMode === 'SCREEN_CAPTURE' && (
-            <span className="flex items-center gap-1.5 rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-bold text-cyan-highlight">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
-              <span>Live Feed: YouTube / Remote Broadcast</span>
+            <span className="flex items-center gap-1.5 rounded border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-xs font-bold text-cyan-highlight">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+              <span>// LIVE FEED: YOUTUBE \\</span>
             </span>
           )}
           {isFrozen && (
@@ -456,7 +457,7 @@ export default function AdaptiveViewerPage() {
               [PAUSED / FROZEN]
             </span>
           )}
-          <span className="hidden md:inline font-telemetry">
+          <span className="hidden md:inline text-muted">
             Hover mouse or use Numpad 1–9 to direct gaze
           </span>
         </div>
@@ -525,6 +526,37 @@ export default function AdaptiveViewerPage() {
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
       />
+
+      {/* Deltea Signature Spiky Divider & Retro Telemetry Footer */}
+      <div className="spiky-divider" />
+      <footer className="hidden sm:flex items-center justify-between border-t border-bg-3 bg-bg-1 px-4 py-1.5 font-telemetry text-[11px] text-muted select-none">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-fg font-bold">@focalpoint</span>
+            <span className="text-bg-3">\</span>
+            <span>gaze-driven accessibility</span>
+          </div>
+          <div className="hidden lg:flex items-center gap-2">
+            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-amber-highlight">AWS BEDROCK</span>
+            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-cyan-highlight">REKOGNITION</span>
+            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-emerald-400">AMPLIFY</span>
+            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-fg">POLLY NEURAL</span>
+            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-amber-highlight">WCAG 2.2 AAA</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <a href="https://github.com/Labreo/focalpoint" target="_blank" rel="noreferrer" className="hover:text-fg hover:underline">
+            💾 github
+          </a>
+          <span className="text-bg-3">\</span>
+          <button onClick={() => setIsHelpModalOpen(true)} className="hover:text-fg hover:underline">
+            ⌨️ shortcuts [?]
+          </button>
+          <span className="text-bg-3">\</span>
+          <span>60 fps webgl</span>
+        </div>
+      </footer>
     </main>
   );
 }

@@ -162,50 +162,55 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-canvas p-6 text-white md:p-10 select-none">
+    <main className="min-h-screen bg-bg text-fg crt bg-grid bg-fixed p-6 md:p-10 select-none">
       <div className="mx-auto max-w-5xl">
         {/* Top Header */}
-        <header className="mb-8 flex items-center justify-between border-b border-white/10 pb-4">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-bg-3 pb-4">
           <Link
             href="/"
-            className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-atkinson text-sm font-bold text-slate-300 transition hover:bg-white/20 hover:text-white"
+            className="flex items-center gap-2 rounded-md border border-bg-3 bg-bg-1 px-3.5 py-1.5 font-telemetry text-xs font-bold text-fg transition hover:border-fg hover:underline"
           >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Return to Viewer</span>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>// RETURN TO VIEWER</span>
           </Link>
 
-          <div className="flex items-center gap-2 font-atkinson">
-            <ShieldCheck className="h-6 w-6 text-amber-highlight" />
-            <h1 className="text-xl font-black uppercase tracking-wider text-amber-highlight">
-              Ophthalmic Pathology & Calibration Profile
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-amber-highlight" />
+            <h1 className="font-bold text-base sm:text-lg text-fg tracking-wider font-telemetry">
+              @focalpoint // pathology_profile
             </h1>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/x.svg" className="size-3.5 animate-spin-snapped" alt="x icon" />
           </div>
 
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 rounded-xl bg-amber-highlight px-5 py-2.5 font-atkinson text-sm font-black text-slate-950 shadow-lg shadow-amber-300/40 transition hover:bg-amber-300"
+            className="flex items-center gap-2 rounded-md bg-amber-highlight px-4 py-2 font-telemetry text-xs font-black text-bg shadow-md transition hover:scale-105"
           >
             {savedSuccess ? (
               <>
-                <Check className="h-4 w-4 text-emerald-950" />
-                <span>Profile Saved!</span>
+                <Check className="h-4 w-4 text-bg font-black" />
+                <span>SAVED (DYNAMODB)</span>
               </>
             ) : (
               <>
-                <Save className="h-4 w-4" />
-                <span>Save Profile</span>
+                <Save className="h-4 w-4 text-bg" />
+                <span>SAVE PROFILE</span>
               </>
             )}
           </button>
         </header>
 
+        {/* Deltea Spiky Divider */}
+        <div className="spiky-divider mb-8" />
+
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           {/* Left Column: Form Controls */}
           <div className="space-y-6 lg:col-span-7">
             {/* Pathology Type Selector */}
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 backdrop-blur-md">
-              <label className="block font-atkinson text-sm font-black uppercase tracking-wider text-slate-400 mb-3">
-                Clinical Diagnosis / Pathology Type
+            <div className="rounded-lg border border-bg-3 bg-bg-1 p-6">
+              <label className="block font-telemetry text-xs font-bold uppercase tracking-wider text-muted mb-3">
+                // DIAGNOSED OPHTHALMIC PATHOLOGY \\
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -217,14 +222,14 @@ export default function ProfilePage() {
                   <button
                     key={item.id}
                     onClick={() => setProfile(p => ({ ...p, type: item.id as PathologyType }))}
-                    className={`rounded-xl border p-3.5 text-left transition ${
+                    className={`rounded-md border p-3.5 text-left transition ${
                       profile.type === item.id
-                        ? 'border-amber-highlight bg-amber-400/15 text-amber-highlight shadow-md'
-                        : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                        ? 'border-amber-highlight bg-amber-400/10 text-amber-highlight shadow-sm'
+                        : 'border-bg-3 bg-bg-2 text-muted hover:border-fg hover:text-fg'
                     }`}
                   >
-                    <div className="font-atkinson text-sm font-bold">{item.label}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{item.desc}</div>
+                    <div className="font-telemetry text-xs font-bold uppercase tracking-wider">{item.label}</div>
+                    <div className="text-[11px] text-muted mt-0.5">{item.desc}</div>
                   </button>
                 ))}
               </div>
@@ -232,12 +237,12 @@ export default function ProfilePage() {
 
             {/* AMD: Preferred Retinal Locus (PRL) Sliders */}
             {profile.type === 'AMD' && (
-              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 backdrop-blur-md">
-                <h3 className="font-atkinson text-sm font-black uppercase tracking-wider text-cyan-highlight mb-4">
-                  Preferred Retinal Locus (PRL) Spatial Offsets
+              <div className="rounded-lg border border-bg-3 bg-bg-1 p-6">
+                <h3 className="font-telemetry text-xs font-bold uppercase tracking-wider text-muted mb-4">
+                  // PREFERRED RETINAL LOCUS (PRL) SPATIAL OFFSETS \\
                 </h3>
 
-                <div className="space-y-4 font-atkinson text-xs">
+                <div className="space-y-4 font-telemetry text-xs text-muted">
                   <div>
                     <div className="flex justify-between mb-1">
                       <span>Horizontal Offset (ΔX):</span>
@@ -287,16 +292,16 @@ export default function ProfilePage() {
             )}
 
             {/* Dwell Threshold Slider */}
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 backdrop-blur-md">
+            <div className="rounded-lg border border-bg-3 bg-bg-1 p-6">
               <div className="flex justify-between items-center mb-2">
-                <span className="font-atkinson text-sm font-black uppercase tracking-wider text-slate-300">
-                  Gaze Dwell Threshold (I-VDT Filter)
+                <span className="font-telemetry text-xs font-bold uppercase tracking-wider text-muted">
+                  // GAZE DWELL THRESHOLD (I-VDT FILTER) \\
                 </span>
                 <span className="font-telemetry font-bold text-amber-highlight">
                   {profile.dwellThresholdMs} ms
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mb-3 font-atkinson">
+              <p className="text-xs text-muted mb-3 font-telemetry">
                 Duration eyes must remain fixated on a text block before dynamic reflow triggers.
               </p>
               <input
@@ -311,9 +316,9 @@ export default function ProfilePage() {
             </div>
 
             {/* Contrast Theme Picker */}
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 backdrop-blur-md">
-              <label className="block font-atkinson text-sm font-black uppercase tracking-wider text-slate-400 mb-3">
-                High-Contrast Palette (WCAG 2.2 AAA Standards)
+            <div className="rounded-lg border border-bg-3 bg-bg-1 p-6">
+              <label className="block font-telemetry text-xs font-bold uppercase tracking-wider text-muted mb-3">
+                // HIGH-CONTRAST PALETTE (WCAG 2.2 AAA STANDARDS) \\
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {(Object.keys(CONTRAST_THEMES) as ContrastPreset[]).map((preset) => {
@@ -322,18 +327,18 @@ export default function ProfilePage() {
                     <button
                       key={preset}
                       onClick={() => setProfile(p => ({ ...p, preferredContrastTheme: preset }))}
-                      className={`rounded-xl border p-3 text-left transition ${
+                      className={`rounded-md border p-3 text-left transition ${
                         profile.preferredContrastTheme === preset
-                          ? 'border-amber-highlight bg-white/10 text-white shadow-md'
-                          : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10'
+                          ? 'border-amber-highlight bg-amber-400/10 text-amber-highlight shadow-sm'
+                          : 'border-bg-3 bg-bg-2 text-muted hover:border-fg hover:text-fg'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <span
-                          className="h-3.5 w-3.5 rounded-full border border-white/40"
+                          className="h-3.5 w-3.5 rounded-full border border-bg-3"
                           style={{ backgroundColor: info.foreground }}
                         />
-                        <span className="font-atkinson text-xs font-bold text-white">{info.name}</span>
+                        <span className="font-telemetry text-xs font-bold text-fg">{info.name}</span>
                       </div>
                       <div className="text-[10px] text-emerald-400 font-telemetry mt-1">{info.contrastRatio}</div>
                     </button>
@@ -345,17 +350,17 @@ export default function ProfilePage() {
 
           {/* Right Column: Live Diagnostic Preview Canvas */}
           <div className="space-y-6 lg:col-span-5">
-            <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 backdrop-blur-md">
+            <div className="rounded-lg border border-bg-3 bg-bg-1 p-6">
               <div className="flex items-center justify-between mb-4">
-                <span className="font-atkinson text-sm font-black uppercase tracking-wider text-amber-highlight">
-                  Live Visual Field Simulation
+                <span className="font-telemetry text-xs font-bold uppercase tracking-wider text-amber-highlight">
+                  // LIVE VISUAL FIELD SIMULATION \\
                 </span>
-                <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold text-slate-300">
-                  Interactive
+                <span className="rounded border border-bg-3 bg-bg-2 px-2 py-0.5 font-telemetry text-[10px] text-muted">
+                  [ INTERACTIVE ]
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-white/20 bg-slate-950">
+              <div className="overflow-hidden rounded-md border border-bg-3 bg-bg">
                 <canvas
                   ref={previewCanvasRef}
                   width={420}
@@ -364,7 +369,7 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <p className="mt-3 font-atkinson text-xs leading-relaxed text-slate-400">
+              <p className="mt-3 font-telemetry text-xs leading-relaxed text-muted">
                 The simulation shows how FocalPoint remaps focal content into functioning peripheral zones (PRL) to completely bypass central scotomas.
               </p>
             </div>

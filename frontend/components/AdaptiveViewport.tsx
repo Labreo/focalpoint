@@ -248,6 +248,18 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         })}
       </div>
 
+      {/* Deltea CRT Monitor Corner Frame Brackets */}
+      <div className="pointer-events-none absolute inset-3 z-30 flex flex-col justify-between font-telemetry text-xs text-muted/60 select-none">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1">┌ [RECON_SURFACE] ────</span>
+          <span className="flex items-center gap-1">──── [OPTICAL_CONE] ┐</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1">└ // GAZE: [{Math.round(gazePoint.x)}, {Math.round(gazePoint.y)}] \\ STATE: {kinematicState}</span>
+          <span className="flex items-center gap-1">// 60 FPS GPU SHADER ┘</span>
+        </div>
+      </div>
+
       {/* Smoothed Kalman Gaze Reticle */}
       <GazeReticle
         x={gazePoint.x}

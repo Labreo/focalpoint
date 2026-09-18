@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Crosshair, ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react';
 import { audioHaptics } from '../../lib/synthetic_audio';
 import { webGazerManager } from '../../lib/webgazer_adapter';
+import { animeTransitions } from '../../lib/anime_transitions';
 
 interface CalibrationPoint {
   id: number;
@@ -87,33 +88,44 @@ export default function CalibrationPage() {
     setIsCompleted(false);
   };
 
+  useEffect(() => {
+    if (isCompleted) {
+      animeTransitions.animateDrawerEntrance('.calibration-modal');
+    }
+  }, [isCompleted]);
+
   return (
-    <main className="relative flex h-screen w-screen flex-col items-center justify-between overflow-hidden bg-slate-950 p-6 text-white select-none">
+    <main className="relative flex h-screen w-screen flex-col items-center justify-between overflow-hidden bg-bg text-fg crt bg-grid bg-fixed p-6 select-none">
       {/* Top Bar */}
-      <header className="flex w-full items-center justify-between border-b border-white/10 pb-4">
+      <header className="flex w-full items-center justify-between border-b border-bg-3 pb-3">
         <Link
           href="/"
-          className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 font-atkinson text-sm font-bold text-slate-300 transition hover:bg-white/20 hover:text-white"
+          className="flex items-center gap-2 rounded-md border border-bg-3 bg-bg-1 px-3.5 py-1.5 font-telemetry text-xs font-bold text-fg transition hover:border-fg hover:underline"
         >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Exit Calibration</span>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>// RETURN TO VIEWER</span>
         </Link>
 
-        <div className="flex items-center gap-2 font-atkinson">
-          <Crosshair className="h-5 w-5 text-cyan-highlight" />
-          <h1 className="text-lg font-black uppercase tracking-wider text-amber-highlight">
-            9-Point Polynomial Gaze Calibration
+        <div className="flex items-center gap-2">
+          <Crosshair className="h-5 w-5 text-amber-highlight" />
+          <h1 className="font-bold text-base sm:text-lg text-fg tracking-wider font-telemetry">
+            @focalpoint // calibration_routine
           </h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icons/x.svg" className="size-3.5 animate-spin-snapped" alt="x icon" />
         </div>
 
         <button
           onClick={handleRestart}
-          className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/20 hover:text-white"
+          className="flex items-center gap-1.5 rounded-md border border-bg-3 bg-bg-1 px-3.5 py-1.5 font-telemetry text-xs font-bold text-muted transition hover:border-fg hover:text-fg"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
-          <span>Restart</span>
+          <RefreshCw className="h-3 w-3" />
+          <span>// RESTART</span>
         </button>
       </header>
+
+      {/* Deltea Spiky Divider */}
+      <div className="w-full spiky-divider mb-4" />
 
       {/* Main Calibration Stage */}
       <div className="relative flex-1 w-full">
@@ -123,7 +135,7 @@ export default function CalibrationPage() {
             {CALIBRATION_POINTS.slice(0, currentPointIndex).map((pt) => (
               <div
                 key={pt.id}
-                className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-emerald-500/40 text-emerald-300 text-[10px] font-bold"
+                className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-emerald-300 font-telemetry text-[10px] font-bold shadow-sm"
                 style={{ left: `${pt.xPercent}%`, top: `${pt.yPercent}%` }}
               >
                 ✓
@@ -149,7 +161,7 @@ export default function CalibrationPage() {
                     cx="50"
                     cy="50"
                     r="40"
-                    stroke="rgba(255, 255, 255, 0.15)"
+                    stroke="#212228"
                     strokeWidth="6"
                     fill="none"
                   />
@@ -168,44 +180,44 @@ export default function CalibrationPage() {
                 </svg>
 
                 {/* Inner Bullseye Target */}
-                <div className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-amber-highlight text-slate-950 shadow-lg shadow-amber-300/60 font-black">
+                <div className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-amber-highlight text-bg shadow-lg shadow-amber-300/40 font-telemetry font-black text-sm">
                   {activePoint.id}
                 </div>
               </div>
 
-              <div className="mt-2 text-center font-atkinson text-xs font-bold text-amber-highlight">
-                Look or click here
+              <div className="mt-2 text-center font-telemetry text-[11px] font-bold uppercase tracking-wider text-amber-highlight">
+                // FIXATE EYE \\
               </div>
             </div>
           </>
         ) : (
           /* Calibration Success Modal */
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="max-w-md rounded-3xl border-2 border-emerald-400 bg-slate-900/95 p-8 text-center shadow-2xl backdrop-blur-xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 mb-4">
-                <CheckCircle2 className="h-10 w-10" />
+            <div className="calibration-modal max-w-md rounded-lg border-2 border-amber-highlight bg-bg-1 p-8 text-center shadow-2xl backdrop-blur-xl">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-md border border-emerald-400/30 bg-emerald-500/15 text-emerald-400 mb-4">
+                <CheckCircle2 className="h-8 w-8" />
               </div>
 
-              <h2 className="font-atkinson text-2xl font-black text-white">
-                Calibration Complete!
+              <h2 className="font-telemetry text-lg font-bold uppercase tracking-wider text-fg">
+                // CALIBRATION COMPLETE \\
               </h2>
 
-              <p className="mt-2 font-atkinson text-sm text-slate-300 leading-relaxed">
-                Polynomial regression matrix successfully mapped to webcam sensor coordinates.
+              <p className="mt-2 font-telemetry text-xs text-muted leading-relaxed">
+                9-point polynomial regression matrix mapped to sensor frame coordinates.
               </p>
 
-              <div className="my-6 rounded-2xl bg-white/5 p-4 font-telemetry">
-                <div className="text-xs text-slate-400">ESTIMATED SPATIAL ACCURACY</div>
-                <div className="text-2xl font-black text-cyan-highlight mt-1">
+              <div className="my-6 rounded-md border border-bg-3 bg-bg-2 p-4 font-telemetry">
+                <div className="text-[10px] uppercase tracking-wider text-muted">// ESTIMATED SPATIAL ACCURACY \\</div>
+                <div className="text-xl font-black text-amber-highlight mt-1">
                   {accuracyScore}
                 </div>
               </div>
 
               <button
                 onClick={() => router.push('/')}
-                className="w-full rounded-xl bg-amber-highlight py-3 font-atkinson text-sm font-black text-slate-950 shadow-lg shadow-amber-300/40 transition hover:bg-amber-300"
+                className="w-full rounded-md bg-amber-highlight py-3 font-telemetry text-xs font-black uppercase tracking-wider text-bg shadow-md transition hover:scale-105"
               >
-                Apply & Launch Viewer
+                APPLY & LAUNCH VIEWER
               </button>
             </div>
           </div>
@@ -213,8 +225,8 @@ export default function CalibrationPage() {
       </div>
 
       {/* Bottom Instructions Footer */}
-      <footer className="w-full max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-3 text-center text-xs text-slate-400 font-atkinson">
-        Keep your head stable and follow the amber ring with your eyes. Point {currentPointIndex + 1} of 9.
+      <footer className="w-full max-w-2xl rounded-md border border-bg-3 bg-bg-1 p-3 text-center text-xs text-muted font-telemetry">
+        [ POINT {currentPointIndex + 1} OF 9 ] // KEEP HEAD STABLE AND FOLLOW AMBER RING WITH EYES
       </footer>
     </main>
   );
