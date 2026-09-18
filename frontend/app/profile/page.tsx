@@ -162,7 +162,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-bg text-fg crt bg-grid bg-fixed p-6 md:p-10 select-none">
+    <main className="min-h-screen bg-bg text-fg p-6 md:p-10 select-none">
       <div className="mx-auto max-w-5xl">
         {/* Top Header */}
         <header className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-bg-3 pb-4">

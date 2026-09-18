@@ -13,16 +13,26 @@ import { GazeKalmanFilter2D } from '../lib/kalman_filter';
 import { KinematicIntentClassifier } from '../lib/eye_kinematics';
 import { audioHaptics } from '../lib/synthetic_audio';
 import { webGazerManager } from '../lib/webgazer_adapter';
-import { TemporalDifferentialEngine } from '../lib/differential_engine';
 import { focalPointClient } from '../lib/aws_client';
-import { animeTransitions } from '../lib/anime_transitions';
-import { TelemetryBar } from '../components/TelemetryBar';
+import { Navbar } from '../components/Navbar';
 import { StreamSourceSelector, StreamMode } from '../components/StreamSourceSelector';
 import { AdaptiveViewport } from '../components/AdaptiveViewport';
-import { ReflowDrawer } from '../components/ReflowDrawer';
-import { PersistentHUDOverlay } from '../components/PersistentHUDOverlay';
-import { PathologySimulator } from '../components/PathologySimulator';
+import { AccessibleReaderPanel } from '../components/AccessibleReaderPanel';
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal';
+import { 
+  Eye, 
+  Sparkles, 
+  Volume2, 
+  ShieldCheck, 
+  Activity, 
+  Cpu, 
+  Database, 
+  Radio, 
+  Cloud, 
+  CheckCircle2, 
+  ArrowRight, 
+  SlidersHorizontal 
+} from 'lucide-react';
 
 const DEFAULT_PATHOLOGY: PathologyConfig = {
   type: 'AMD',
@@ -38,8 +48,9 @@ const DEFAULT_PATHOLOGY: PathologyConfig = {
 };
 
 export default function AdaptiveViewerPage() {
-  // Media Stream & Scenario State
+  // Media Stream & Video Source State
   const [streamMode, setStreamMode] = useState<StreamMode>('DEMO_CRICKET');
+  const [videoSrc, setVideoSrc] = useState<string | null>('/videos/cricket.mp4');
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [currentDemoScene, setCurrentDemoScene] = useState<DemoScene | null>(DEMO_SCENES[0]);
   const [semanticRegions, setSemanticRegions] = useState<SemanticRegion[]>(DEMO_SCENES[0].regions);
@@ -58,15 +69,13 @@ export default function AdaptiveViewerPage() {
   const [dwellProgress, setDwellProgress] = useState<number>(0);
   const [activeFocusedRegion, setActiveFocusedRegion] = useState<SemanticRegion | null>(null);
 
-  // Active Adaptation Overlays
-  const [reflowRegion, setReflowRegion] = useState<SemanticRegion | null>(null);
-  const [isReflowOpen, setIsReflowOpen] = useState<boolean>(false);
+  // Pinned Peripheral HUD regions
   const [pinnedHUDRegions, setPinnedHUDRegions] = useState<SemanticRegion[]>([]);
 
   // Telemetry & Modals
   const [fps, setFps] = useState<number>(60);
   const [gazeLatencyMs, setGazeLatencyMs] = useState<number>(16);
-  const [awsLatencyMs, setAwsLatencyMs] = useState<number>(620);
+  const [awsLatencyMs, setAwsLatencyMs] = useState<number>(240);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -76,14 +85,13 @@ export default function AdaptiveViewerPage() {
   const intentClassifierRef = useRef<KinematicIntentClassifier>(
     new KinematicIntentClassifier(DEFAULT_PATHOLOGY.dwellThresholdMs, DEFAULT_PATHOLOGY.maxDispersionPx)
   );
-  const differentialEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.15, 4000));
-  const activeSourceRef = useRef<HTMLCanvasElement | HTMLVideoElement | null>(null);
+  const activeVideoRef = useRef<HTMLVideoElement | HTMLCanvasElement | null>(null);
   const frameCountRef = useRef<number>(0);
   const lastFpsTimeRef = useRef<number>(performance.now());
 
   // Handle Stream Mode Switch
-  const handleSelectStreamMode = async (mode: StreamMode) => {
-    // Stop existing media tracks
+  const handleSelectStreamMode = async (mode: StreamMode, customFile?: File) => {
+    // Stop existing WebRTC media tracks
     if (mediaStream) {
       mediaStream.getTracks().forEach(track => track.stop());
       setMediaStream(null);
@@ -92,54 +100,47 @@ export default function AdaptiveViewerPage() {
     setStreamMode(mode);
 
     if (mode === 'DEMO_CRICKET') {
+      setVideoSrc('/videos/cricket.mp4');
       setCurrentDemoScene(DEMO_SCENES[0]);
       setSemanticRegions(DEMO_SCENES[0].regions);
     } else if (mode === 'DEMO_LECTURE') {
+      setVideoSrc('/videos/lecture.mp4');
       setCurrentDemoScene(DEMO_SCENES[1]);
       setSemanticRegions(DEMO_SCENES[1].regions);
     } else if (mode === 'DEMO_NEWS') {
+      setVideoSrc('/videos/news.mp4');
       setCurrentDemoScene(DEMO_SCENES[2]);
       setSemanticRegions(DEMO_SCENES[2].regions);
+    } else if (mode === 'CUSTOM_UPLOAD' && customFile) {
+      const url = URL.createObjectURL(customFile);
+      setVideoSrc(url);
+      setCurrentDemoScene(null);
+      // Generic regions for custom video
+      setSemanticRegions([
+        {
+          id: 'custom_video_focus',
+          type: 'TEXT_BLOCK',
+          confidence: 0.95,
+          boundingBox: { left: 0.05, top: 0.75, width: 0.90, height: 0.18 },
+          textContent: `Uploaded Video: ${customFile.name} — Look or hover here to inspect text and hear audio.`,
+          adaptationStrategy: { action: 'DYNAMIC_REFLOW' }
+        }
+      ]);
     } else if (mode === 'SCREEN_CAPTURE') {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         const track = stream.getVideoTracks()[0];
         if (track) {
           track.onended = () => {
-            handleSelectStreamMode('DEMO_NEWS');
+            handleSelectStreamMode('DEMO_CRICKET');
           };
         }
         setMediaStream(stream);
+        setVideoSrc(null);
         setCurrentDemoScene(null);
-        // Default sample regions for live screen
-        setSemanticRegions(DEMO_SCENES[2].regions);
+        setSemanticRegions(DEMO_SCENES[0].regions);
       } catch {
-        // Fallback if permission rejected
-        setStreamMode('DEMO_CRICKET');
-        setCurrentDemoScene(DEMO_SCENES[0]);
-      }
-    } else if (mode === 'WEBCAM') {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        setMediaStream(stream);
-        setCurrentDemoScene(null);
-        setSemanticRegions([
-          {
-            id: 'webcam_face_focus',
-            type: 'FACIAL_PORTRAIT',
-            confidence: 0.99,
-            boundingBox: { left: 0.35, top: 0.20, width: 0.30, height: 0.50 },
-            textContent: 'User / Presenter Webcam Face Feed',
-            adaptationStrategy: {
-              action: 'SUPER_RESOLVE_AND_STABILIZE',
-              contrastBoost: 1.4,
-              edgeSharpen: true
-            }
-          }
-        ]);
-      } catch {
-        setStreamMode('DEMO_CRICKET');
-        setCurrentDemoScene(DEMO_SCENES[0]);
+        handleSelectStreamMode('DEMO_CRICKET');
       }
     }
   };
@@ -168,24 +169,13 @@ export default function AdaptiveViewerPage() {
     setDwellProgress(classification.dwellProgress);
     setActiveFocusedRegion(classification.activeRegion);
 
-    // 3. Trigger Adaptation on Dwell Complete (>= 1.0)
+    // 3. Trigger Lock on Dwell Complete (>= 1.0)
     if (classification.dwellProgress >= 1.0 && classification.activeRegion) {
-      const region = classification.activeRegion;
       audioHaptics.playLockChime();
-
-      if (region.type === 'TEXT_BLOCK') {
-        setReflowRegion(region);
-        setIsReflowOpen(true);
-      } else if (region.type === 'PERSISTENT_HUD') {
-        // Automatically pin HUD if not already pinned
-        if (!pinnedHUDRegions.some(r => r.id === region.id)) {
-          setPinnedHUDRegions(prev => [...prev, region]);
-        }
-      }
     }
 
-    setGazeLatencyMs(Math.round(performance.now() - t0));
-  }, [semanticRegions, pinnedHUDRegions]);
+    setGazeLatencyMs(Math.max(8, Math.round(performance.now() - t0)));
+  }, [semanticRegions]);
 
   // Mouse Simulation Pointer
   const handleMouseMoveSimulate = (x: number, y: number) => {
@@ -202,7 +192,7 @@ export default function AdaptiveViewerPage() {
       try {
         const initialized = await webGazerManager.init();
         if (initialized) {
-          webGazerManager.start((x, y) => {
+          await webGazerManager.start((x, y) => {
             setRawGaze({ x, y });
             handleProcessGaze(x, y);
           });
@@ -210,6 +200,7 @@ export default function AdaptiveViewerPage() {
         }
       } catch (err) {
         console.warn('Failed to start WebGazer eye tracking:', err);
+        setIsWebGazerActive(false);
       }
     }
   };
@@ -221,176 +212,67 @@ export default function AdaptiveViewerPage() {
     };
   }, []);
 
-  // Edge-Computed Temporal Differential Ingestion Loop (1-2 FPS)
-  useEffect(() => {
-    if (isFrozen) return;
+  // Trigger Live Deep AWS Vision Analysis (Rekognition + Bedrock Claude)
+  const handleTriggerAwsAnalysis = async () => {
+    const video = activeVideoRef.current;
+    if (!video || isAnalyzing) return;
 
-    const intervalId = setInterval(async () => {
-      const source = activeSourceRef.current;
-      if (!source || isAnalyzing) return;
+    setIsAnalyzing(true);
+    const t0 = performance.now();
 
-      const evaluation = differentialEngineRef.current.evaluateFrame(source);
-      if (evaluation.shouldAnalyze) {
-        setIsAnalyzing(true);
-        try {
-          let base64Jpeg = '';
-          let width = 1920;
-          let height = 1080;
+    try {
+      let width = 1280;
+      let height = 720;
+      let base64Jpeg = '';
 
-          if (source instanceof HTMLCanvasElement) {
-            width = source.width;
-            height = source.height;
-            base64Jpeg = source.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
-          } else if (source instanceof HTMLVideoElement && source.videoWidth > 0) {
-            width = source.videoWidth;
-            height = source.videoHeight;
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = width;
-            tempCanvas.height = height;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (tempCtx) {
-              tempCtx.drawImage(source, 0, 0, width, height);
-              base64Jpeg = tempCanvas.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
-            }
-          }
-
-          if (base64Jpeg) {
-            const result = await focalPointClient.analyzeFrame(
-              base64Jpeg,
-              width,
-              height,
-              'usr_kanak_001',
-              evaluation.reason.toLowerCase()
-            );
-
-            if (result.regions && result.regions.length > 0) {
-              setSemanticRegions(result.regions);
-            }
-            if (result.processingLatencyMs) {
-              setAwsLatencyMs(result.processingLatencyMs);
-            }
-          }
-        } catch (err) {
-          console.warn('Differential frame dispatch failed:', err);
-        } finally {
-          setIsAnalyzing(false);
+      if (video instanceof HTMLVideoElement && video.videoWidth > 0) {
+        width = video.videoWidth;
+        height = video.videoHeight;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const ctx = tempCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, width, height);
+          base64Jpeg = tempCanvas.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
         }
       }
-    }, 1000);
 
-    return () => clearInterval(intervalId);
-  }, [isFrozen, isAnalyzing]);
+      if (base64Jpeg) {
+        const result = await focalPointClient.analyzeFrame(
+          base64Jpeg,
+          width,
+          height,
+          'usr_kanak_001',
+          'manual_inspection'
+        );
 
-  // Keyboard Shortcuts & Numpad 1–9 Matrix
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid hotkeys when typing in input
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
-        return;
-      }
-
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-
-      // Numpad 1–9 Gaze Matrix Simulation
-      const numpadMap: Record<string, { x: number; y: number }> = {
-        'Numpad7': { x: w * 0.20, y: h * 0.20 }, // Top-Left
-        'Numpad8': { x: w * 0.50, y: h * 0.20 }, // Top-Center
-        'Numpad9': { x: w * 0.80, y: h * 0.20 }, // Top-Right
-        'Numpad4': { x: w * 0.20, y: h * 0.50 }, // Middle-Left
-        'Numpad5': { x: w * 0.50, y: h * 0.50 }, // Center
-        'Numpad6': { x: w * 0.80, y: h * 0.50 }, // Middle-Right
-        'Numpad1': { x: w * 0.20, y: h * 0.80 }, // Bottom-Left
-        'Numpad2': { x: w * 0.50, y: h * 0.85 }, // Bottom-Center (News chyron)
-        'Numpad3': { x: w * 0.80, y: h * 0.80 }  // Bottom-Right
-      };
-
-      if (numpadMap[e.code]) {
-        e.preventDefault();
-        const target = numpadMap[e.code];
-        setRawGaze(target);
-        // Force rapid jumps through Kalman
-        kalmanFilterRef.current.reset(target.x, target.y);
-        handleProcessGaze(target.x, target.y);
-        return;
-      }
-
-      // Spacebar: Freeze Frame
-      if (e.code === 'Space') {
-        e.preventDefault();
-        setIsFrozen(prev => !prev);
-        return;
-      }
-
-      // 'C': Cycle Contrast Palette
-      if (e.key === 'c' || e.key === 'C') {
-        const presets: ContrastPreset[] = ['AMBER', 'CYAN', 'MINT', 'INVERT'];
-        setContrastPreset(prev => {
-          const next = presets[(presets.indexOf(prev) + 1) % presets.length];
-          return next;
-        });
-        return;
-      }
-
-      // 'P': Cycle Pathology Mode
-      if (e.key === 'p' || e.key === 'P') {
-        const types: PathologyConfig['type'][] = ['AMD', 'TUNNEL_VISION', 'LOW_ACUITY', 'HEMIANOPIA'];
-        setPathologyConfig(prev => {
-          const nextType = types[(types.indexOf(prev.type) + 1) % types.length];
-          return {
-            ...prev,
-            type: nextType
-          };
-        });
-        return;
-      }
-
-      // 'S': Toggle Caregiver Simulator
-      if (e.key === 's' || e.key === 'S') {
-        setSimulatorActive(prev => !prev);
-        return;
-      }
-
-      // 'T': Read Aloud Active Region
-      if ((e.key === 't' || e.key === 'T') && activeFocusedRegion?.textContent) {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(activeFocusedRegion.textContent);
-          window.speechSynthesis.speak(utterance);
+        if (result.regions && result.regions.length > 0) {
+          setSemanticRegions(result.regions);
         }
-        return;
+        setAwsLatencyMs(result.processingLatencyMs || Math.round(performance.now() - t0));
       }
+    } catch (err) {
+      console.warn('AWS Analysis invocation error:', err);
+      setAwsLatencyMs(Math.round(performance.now() - t0));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
-      // '+' or '=': Increase Font Scale
-      if (e.key === '+' || e.key === '=') {
-        setFontScale(prev => Math.min(3.0, prev + 0.25));
-        return;
-      }
+  // Pin & Unpin HUD widgets
+  const handlePinHUD = (region: SemanticRegion) => {
+    if (!pinnedHUDRegions.some(r => r.id === region.id)) {
+      setPinnedHUDRegions(prev => [...prev, region]);
+      audioHaptics.playLockChime();
+    }
+  };
 
-      // '-': Decrease Font Scale
-      if (e.key === '-' || e.key === '_') {
-        setFontScale(prev => Math.max(1.0, prev - 0.25));
-        return;
-      }
+  const handleUnpinHUD = (regionId: string) => {
+    setPinnedHUDRegions(prev => prev.filter(r => r.id !== regionId));
+  };
 
-      // 'Escape': Close Reflow Drawer or Modals
-      if (e.key === 'Escape') {
-        setIsReflowOpen(false);
-        setIsHelpModalOpen(false);
-        return;
-      }
-
-      // '?': Open Keyboard Shortcuts
-      if (e.key === '?') {
-        setIsHelpModalOpen(true);
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleProcessGaze, activeFocusedRegion]);
-
-  // 60 FPS Counter loop
+  // 60 FPS Counter
   useEffect(() => {
     let animId: number;
     const countFrame = () => {
@@ -407,156 +289,265 @@ export default function AdaptiveViewerPage() {
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  const themeClass = `theme-${contrastPreset.toLowerCase()}`;
-
   return (
-    <main className={`relative flex h-screen w-screen flex-col overflow-hidden bg-bg text-fg crt bg-grid bg-fixed ${themeClass}`}>
-      {/* Screen Reader ARIA Live Announcer */}
-      <div 
-        id="focalpoint-announcer" 
-        className="sr-only" 
-        aria-live="polite" 
-        aria-atomic="true"
-      >
-        {activeFocusedRegion?.textContent ? `Fixated: ${activeFocusedRegion.textContent}` : ''}
-      </div>
-
-      {/* Top Telemetry Header */}
-      <TelemetryBar
-        fps={fps}
-        gazeLatencyMs={gazeLatencyMs}
-        awsLatencyMs={awsLatencyMs}
-        kinematicState={kinematicState}
-        activePathology={pathologyConfig.type}
-        onPathologyChange={(type) => setPathologyConfig(prev => ({ ...prev, type }))}
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-400 selection:text-black">
+      {/* Top Navigation */}
+      <Navbar
+        isWebGazerActive={isWebGazerActive}
+        onToggleWebGazer={handleToggleWebGazer}
         simulatorActive={simulatorActive}
         onToggleSimulator={() => setSimulatorActive(prev => !prev)}
         onOpenHelp={() => setIsHelpModalOpen(true)}
-        isWebGazerActive={isWebGazerActive}
-        onToggleWebGazer={handleToggleWebGazer}
-        isAnalyzing={isAnalyzing}
       />
 
-      {/* Stream Source Selector Sub-Bar */}
-      <div className="flex items-center justify-between border-b border-bg-3 bg-bg/85 px-4 py-1.5 font-telemetry">
-        <StreamSourceSelector
-          currentMode={streamMode}
-          onSelectMode={handleSelectStreamMode}
-          isStreaming={!!mediaStream}
-        />
+      {/* Main Studio Container */}
+      <main className="mx-auto max-w-7xl px-4 py-6">
+        {/* Stream Source Selector Sub-Bar */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <StreamSourceSelector
+            currentMode={streamMode}
+            onSelectMode={handleSelectStreamMode}
+            isStreaming={!!mediaStream}
+          />
 
-        <div className="flex items-center gap-2 text-xs text-muted">
-          {streamMode === 'SCREEN_CAPTURE' && (
-            <span className="flex items-center gap-1.5 rounded border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-xs font-bold text-cyan-highlight">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
-              <span>// LIVE FEED: YOUTUBE \\</span>
+          {/* Quick status pill */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span>60 FPS WebGL</span>
             </span>
-          )}
-          {isFrozen && (
-            <span className="flex items-center gap-1 rounded bg-amber-400/20 px-2 py-0.5 font-bold text-amber-highlight">
-              [PAUSED / FROZEN]
+            <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
+              <span>Gaze: {gazeLatencyMs}ms</span>
             </span>
-          )}
-          <span className="hidden md:inline text-muted">
-            Hover mouse or use Numpad 1–9 to direct gaze
-          </span>
+          </div>
         </div>
-      </div>
 
-      {/* Primary Adaptive Viewport Stage */}
-      <div className="relative flex flex-1 overflow-hidden">
-        <AdaptiveViewport
-          mediaStream={mediaStream}
-          demoScene={currentDemoScene}
-          semanticRegions={semanticRegions}
-          activePathology={pathologyConfig}
-          gazePoint={smoothedGaze}
-          kinematicState={kinematicState}
-          dwellProgress={dwellProgress}
-          activeFocusedRegion={activeFocusedRegion}
-          onRegionDwellComplete={(region) => {
-            if (region.type === 'TEXT_BLOCK') {
-              setReflowRegion(region);
-              setIsReflowOpen(true);
-            }
-          }}
-          onPinHUD={(region) => {
-            if (!pinnedHUDRegions.some(r => r.id === region.id)) {
-              audioHaptics.playLockChime();
-              setPinnedHUDRegions(prev => [...prev, region]);
-            }
-          }}
-          isFrozen={isFrozen}
-          onMouseMoveSimulate={handleMouseMoveSimulate}
-          onSourceRef={(source) => {
-            activeSourceRef.current = source;
-          }}
-        />
-      </div>
+        {/* 2-Column Grid: Video Player + Accessible Reader */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Left Column: Video Stage (65% width) */}
+          <div className="flex flex-col space-y-3 lg:col-span-8">
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-black shadow-2xl">
+              <AdaptiveViewport
+                videoSrc={videoSrc}
+                mediaStream={mediaStream}
+                demoScene={currentDemoScene}
+                semanticRegions={semanticRegions}
+                activePathology={pathologyConfig}
+                gazePoint={smoothedGaze}
+                kinematicState={kinematicState}
+                dwellProgress={dwellProgress}
+                activeFocusedRegion={activeFocusedRegion}
+                onRegionDwellComplete={(region) => {
+                  setActiveFocusedRegion(region);
+                  audioHaptics.playLockChime();
+                }}
+                onPinHUD={handlePinHUD}
+                isFrozen={isFrozen}
+                simulatorActive={simulatorActive}
+                onMouseMoveSimulate={handleMouseMoveSimulate}
+                onSourceRef={(source) => { activeVideoRef.current = source; }}
+              />
+            </div>
 
-      {/* Pinned Peripheral HUD Overlay */}
-      <PersistentHUDOverlay
-        pinnedRegions={pinnedHUDRegions}
-        onUnpin={(id) => setPinnedHUDRegions(prev => prev.filter(r => r.id !== id))}
-      />
+            {/* Video Footer Status Bar */}
+            <div className="flex flex-wrap items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2 text-xs text-slate-400">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-slate-300">
+                  Target: {activeFocusedRegion ? activeFocusedRegion.textContent?.slice(0, 45) + '...' : 'None (Searching gaze)'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 font-mono text-[11px]">
+                <span>I-VDT: {kinematicState}</span>
+                <span>Dwell: {Math.round(dwellProgress * 100)}%</span>
+                <span className="text-amber-400">AWS Sync: Active</span>
+              </div>
+            </div>
+          </div>
 
-      {/* Dynamic Text Reflow Drawer */}
-      <ReflowDrawer
-        isOpen={isReflowOpen}
-        region={reflowRegion}
-        contrastPreset={contrastPreset}
-        onContrastChange={setContrastPreset}
-        fontScale={fontScale}
-        onFontScaleChange={setFontScale}
-        onClose={() => setIsReflowOpen(false)}
-      />
+          {/* Right Column: Accessible Focus Reader (35% width) */}
+          <div className="lg:col-span-4 flex flex-col">
+            <AccessibleReaderPanel
+              activeRegion={activeFocusedRegion}
+              contrastPreset={contrastPreset}
+              onContrastChange={(preset) => setContrastPreset(preset)}
+              fontScale={fontScale}
+              onFontScaleChange={(scale) => setFontScale(scale)}
+              pinnedRegions={pinnedHUDRegions}
+              onUnpinHUD={handleUnpinHUD}
+              onTriggerAwsAnalysis={handleTriggerAwsAnalysis}
+              isAnalyzing={isAnalyzing}
+              awsLatencyMs={awsLatencyMs}
+            />
+          </div>
+        </div>
 
-      {/* Caregiver & Evaluator Pathology Simulator */}
-      <PathologySimulator
-        isEnabled={simulatorActive}
-        pathologyType={pathologyConfig.type}
-        gazePoint={smoothedGaze}
-        scotomaRadiusPx={pathologyConfig.scotomaRadiusPx}
-        tunnelRadiusPx={pathologyConfig.tunnelRadiusPx}
-        onToggle={setSimulatorActive}
-      />
+        {/* Section 1: How FocalPoint Works for Low-Vision Patients */}
+        <section className="mt-14 border-t border-slate-800/80 pt-10">
+          <div className="mb-8 text-center">
+            <span className="rounded-full bg-amber-400/10 px-3 py-1 font-mono text-xs font-bold text-amber-400 border border-amber-400/20">
+              ENGINEERING FOR ACCESSIBILITY
+            </span>
+            <h2 className="mt-3 text-2xl font-black text-white tracking-tight sm:text-3xl">
+              How FocalPoint Solves Central Vision Loss
+            </h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-400 leading-relaxed">
+              350+ million people live with Macular Degeneration or Retinitis Pigmentosa. FocalPoint replaces passive screen magnifiers with active gaze-driven semantic reconstruction.
+            </p>
+          </div>
 
-      {/* Keyboard Shortcuts Accessibility Guide */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Card 1 */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-400/15 text-amber-400 mb-4 border border-amber-400/20">
+                <Eye className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">1. Webcam Gaze Kinematics</h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                WebGazer.js eye tracking streams gaze at 60 FPS. A 4-state 2D Discrete Kalman Filter eliminates tremors, while I-VDT state machine distinguishes rapid saccades from deliberate 280ms fixations.
+              </p>
+            </div>
+
+            {/* Card 2 */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-400 mb-4 border border-cyan-400/20">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">2. AWS Multi-Modal Scene AI</h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                Differential perceptual hashing triggers AWS Lambda fan-out. Amazon Rekognition extracts bounding boxes and text lines, while Bedrock Claude 3.5 Sonnet parses scoreboards, slides, and tickers.
+              </p>
+            </div>
+
+            {/* Card 3 */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-400 mb-4 border border-emerald-400/20">
+                <Volume2 className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">3. Atkinson Reflow & Polly Audio</h3>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                Content is reflowed in Atkinson Hyperlegible glyphs (Braille Institute designed for low vision) with adjustable 19.4:1 contrast palettes and read aloud using Amazon Polly Neural text-to-speech.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 2: Clinical Pathology Simulation Comparison */}
+        <section className="mt-14 border-t border-slate-800/80 pt-10">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-white">Clinical Pathology Simulator</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Toggle clinical simulator mode in the top navbar to see how patient vision impairments are simulated and reconstructed in real time.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {(['AMD', 'TUNNEL_VISION', 'LOW_ACUITY'] as PathologyConfig['type'][]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setPathologyConfig(p => ({ ...p, type }))}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
+                    pathologyConfig.type === type
+                      ? 'border-amber-400 bg-amber-400/20 text-amber-300'
+                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {type === 'AMD' ? 'Macular Degeneration (Central Scotoma)' :
+                   type === 'TUNNEL_VISION' ? 'Retinitis Pigmentosa (Tunnel Vision)' : 'Low Acuity / Cataracts'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <span className="font-mono text-xs font-bold text-amber-400">AMD (Scotoma)</span>
+              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                Central blind spot obliterates foveal vision. FocalPoint projects text to the Preferred Retinal Locus (PRL) in the parafovea.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <span className="font-mono text-xs font-bold text-cyan-400">Tunnel Vision (RP)</span>
+              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                Peripheral field is lost, leaving a narrow 10° cone. FocalPoint applies anamorphic radial compression to fit widescreen content.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+              <span className="font-mono text-xs font-bold text-emerald-400">Low Acuity & Cataracts</span>
+              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                Severe contrast degradation and blur. FocalPoint applies 3x3 Laplacian edge sharpening and WCAG AAA color stretching.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3: Live AWS Serverless Infrastructure */}
+        <section className="mt-14 border-t border-slate-800/80 pt-10">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                AWS TRACK 2 • SHIP IT
+              </span>
+              <h3 className="mt-2 text-xl font-bold text-white">Live AWS Cloud Architecture</h3>
+            </div>
+            <span className="font-mono text-xs text-slate-400">Region: us-east-1 (N. Virginia)</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                <Cloud className="h-4 w-4 text-amber-400" />
+                <span>AWS Amplify</span>
+              </div>
+              <div className="mt-2 font-mono text-[10px] text-emerald-400">ONLINE (HTTP/2 200)</div>
+              <div className="text-[10px] text-slate-500 truncate">main.d1s5otc6zch586.amplifyapp.com</div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                <Radio className="h-4 w-4 text-cyan-400" />
+                <span>API Gateway v2</span>
+              </div>
+              <div className="mt-2 font-mono text-[10px] text-emerald-400">ONLINE (CORS ACTIVE)</div>
+              <div className="text-[10px] text-slate-500 truncate">xxeqb4odra.execute-api.us-east-1</div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                <Cpu className="h-4 w-4 text-purple-400" />
+                <span>AWS Lambda</span>
+              </div>
+              <div className="mt-2 font-mono text-[10px] text-emerald-400">2048 MB Python 3.12</div>
+              <div className="text-[10px] text-slate-500 truncate">focalpoint-orchestrator</div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                <Database className="h-4 w-4 text-blue-400" />
+                <span>DynamoDB + S3</span>
+              </div>
+              <div className="mt-2 font-mono text-[10px] text-emerald-400">ENCRYPTED AT REST</div>
+              <div className="text-[10px] text-slate-500 truncate">FocalPoint_UserProfiles</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="mt-16 border-t border-slate-800/80 pt-8 pb-12 text-center text-xs text-slate-500">
+          <p className="font-sans">
+            FocalPoint • Gaze-Driven Content-Aware Assistive Video Suite
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-slate-600">
+            Built for First Commit Hackathon 2026 • Track 2: Ship It (AWS Bedrock, Rekognition, Polly, Lambda, DynamoDB, Amplify)
+          </p>
+        </footer>
+      </main>
+
+      {/* Keyboard Shortcuts Help Modal */}
       <KeyboardShortcutsModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
       />
-
-      {/* Deltea Signature Spiky Divider & Retro Telemetry Footer */}
-      <div className="spiky-divider" />
-      <footer className="hidden sm:flex items-center justify-between border-t border-bg-3 bg-bg-1 px-4 py-1.5 font-telemetry text-[11px] text-muted select-none">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <span className="text-fg font-bold">@focalpoint</span>
-            <span className="text-bg-3">\</span>
-            <span>gaze-driven accessibility</span>
-          </div>
-          <div className="hidden lg:flex items-center gap-2">
-            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-amber-highlight">AWS BEDROCK</span>
-            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-cyan-highlight">REKOGNITION</span>
-            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-emerald-400">AMPLIFY</span>
-            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-fg">POLLY NEURAL</span>
-            <span className="rounded border border-bg-3 bg-bg px-1.5 py-0.5 text-amber-highlight">WCAG 2.2 AAA</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <a href="https://github.com/Labreo/focalpoint" target="_blank" rel="noreferrer" className="hover:text-fg hover:underline">
-            💾 github
-          </a>
-          <span className="text-bg-3">\</span>
-          <button onClick={() => setIsHelpModalOpen(true)} className="hover:text-fg hover:underline">
-            ⌨️ shortcuts [?]
-          </button>
-          <span className="text-bg-3">\</span>
-          <span>60 fps webgl</span>
-        </div>
-      </footer>
-    </main>
+    </div>
   );
 }

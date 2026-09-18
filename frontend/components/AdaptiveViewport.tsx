@@ -12,6 +12,7 @@ import { computePathologyTransform } from '../lib/pathology_transforms';
 import { Pin, Type, User, BarChart2 } from 'lucide-react';
 
 interface AdaptiveViewportProps {
+  videoSrc?: string | null;
   mediaStream: MediaStream | null;
   demoScene: DemoScene | null;
   semanticRegions: SemanticRegion[];
@@ -23,11 +24,13 @@ interface AdaptiveViewportProps {
   onRegionDwellComplete: (region: SemanticRegion) => void;
   onPinHUD: (region: SemanticRegion) => void;
   isFrozen: boolean;
+  simulatorActive?: boolean;
   onMouseMoveSimulate?: (x: number, y: number) => void;
-  onSourceRef?: (source: HTMLCanvasElement | HTMLVideoElement | null) => void;
+  onSourceRef?: (source: HTMLVideoElement | HTMLCanvasElement | null) => void;
 }
 
 export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
+  videoSrc,
   mediaStream,
   demoScene,
   semanticRegions,
@@ -39,27 +42,24 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   onRegionDwellComplete,
   onPinHUD,
   isFrozen,
+  simulatorActive = false,
   onMouseMoveSimulate,
   onSourceRef
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [isMuted, setIsMuted] = useState<boolean>(true);
 
-  // Notify parent of active media source for differential engine
+  // Notify parent of active video source for frame capture
   useEffect(() => {
-    if (onSourceRef) {
-      if (mediaStream && videoRef.current) {
-        onSourceRef(videoRef.current);
-      } else if (canvasRef.current) {
-        onSourceRef(canvasRef.current);
-      }
+    if (onSourceRef && videoRef.current) {
+      onSourceRef(videoRef.current);
     }
-  }, [mediaStream, demoScene, onSourceRef]);
+  }, [videoSrc, mediaStream, onSourceRef]);
 
   const [viewportSize, setViewportSize] = useState({ width: 1280, height: 720 });
 
-  // Update viewport dimensions on resize
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
@@ -72,39 +72,54 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Connect WebRTC mediaStream to HTML5 video element
+  // Connect WebRTC mediaStream or videoSrc to HTML5 video element
   useEffect(() => {
-    if (videoRef.current && mediaStream) {
-      videoRef.current.srcObject = mediaStream;
-      videoRef.current.play().catch(() => {});
-    }
-  }, [mediaStream]);
+    const video = videoRef.current;
+    if (!video) return;
 
-  // Render loop for Demo Scenes
-  useEffect(() => {
-    let animationFrameId: number;
-    let startTime = performance.now();
-
-    const render = () => {
-      const canvas = canvasRef.current;
-      if (canvas && demoScene && !mediaStream) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const w = canvas.width;
-          const h = canvas.height;
-          const elapsedSec = (performance.now() - startTime) / 1000.0;
-          demoScene.canvasRender(ctx, w, h, elapsedSec);
-        }
+    if (mediaStream) {
+      video.srcObject = mediaStream;
+      video.play().catch(() => {});
+    } else {
+      video.srcObject = null;
+      if (videoSrc) {
+        video.src = videoSrc;
+        video.play().catch(() => {});
       }
-      animationFrameId = requestAnimationFrame(render);
-    };
-
-    if (!isFrozen) {
-      animationFrameId = requestAnimationFrame(render);
     }
+  }, [mediaStream, videoSrc]);
 
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [demoScene, mediaStream, isFrozen]);
+  // Handle freeze / play state
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isFrozen) {
+      video.pause();
+      setIsPlaying(false);
+    } else {
+      video.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  }, [isFrozen]);
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
+  };
 
   // Compute active pathology CSS transforms and filters
   const pathologyTransform = computePathologyTransform(
@@ -113,10 +128,12 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     viewportSize
   );
 
-  // Handle manual mouse hover for testing without eye tracker
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (onMouseMoveSimulate) {
-      onMouseMoveSimulate(e.clientX, e.clientY);
+    if (onMouseMoveSimulate && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      onMouseMoveSimulate(x, y);
     }
   };
 
@@ -124,41 +141,27 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     <div
       ref={containerRef}
       onPointerMove={handlePointerMove}
-      className="relative flex h-full w-full flex-1 items-center justify-center overflow-hidden bg-slate-950 select-none"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-black select-none shadow-2xl"
       style={{
-        transform: pathologyTransform.viewportTransform,
+        transform: simulatorActive ? pathologyTransform.viewportTransform : undefined,
         transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)'
       }}
     >
-      {/* Media Canvas Stage (for Demo Broadcast Scenes) */}
-      {!mediaStream && demoScene && (
-        <canvas
-          ref={canvasRef}
-          width={1920}
-          height={1080}
-          className="h-full w-full object-contain"
-          style={{
-            filter: pathologyTransform.canvasFilter
-          }}
-        />
-      )}
+      {/* Real HTML5 Video Player */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        loop
+        muted={isMuted}
+        className="h-full w-full object-contain"
+        style={{
+          filter: simulatorActive ? pathologyTransform.canvasFilter : undefined
+        }}
+      />
 
-      {/* Live Video Element (for Screen Capture or Webcam) */}
-      {mediaStream && (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="h-full w-full object-contain"
-          style={{
-            filter: pathologyTransform.canvasFilter
-          }}
-        />
-      )}
-
-      {/* Pathology Mask Overlay (Central Scotoma or Tunnel Vision Mask) */}
-      {pathologyTransform.maskOverlay && (
+      {/* Pathology Mask Overlay (Central Scotoma or Tunnel Vision Mask - only in Simulator Mode) */}
+      {simulatorActive && pathologyTransform.maskOverlay && (
         <div
           className="pointer-events-none absolute inset-0 z-10"
           style={{
@@ -168,7 +171,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         />
       )}
 
-      {/* Interactive Semantic Region Overlay Contours */}
+      {/* Interactive Semantic Region Bounding Boxes */}
       <div className="pointer-events-none absolute inset-0 z-20">
         {semanticRegions.map((region) => {
           if (region.type === 'BACKGROUND_CONTEXT') return null;
@@ -176,21 +179,20 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           const box = region.boundingBox;
           const isFocused = activeFocusedRegion?.id === region.id;
 
-          // Color & Icon mapping based on semantic entity type
-          let borderColor = 'border-amber-highlight/60';
-          let bgColor = 'bg-amber-400/5';
-          let tagBadgeColor = 'bg-amber-highlight text-slate-950';
+          let borderColor = 'border-amber-400/80';
+          let bgColor = 'bg-amber-400/10';
+          let tagBadgeColor = 'bg-amber-400 text-black';
           let IconComponent = Type;
 
           if (region.type === 'FACIAL_PORTRAIT') {
-            borderColor = 'border-cyan-highlight/70';
-            bgColor = 'bg-cyan-500/10';
-            tagBadgeColor = 'bg-cyan-highlight text-slate-950';
+            borderColor = 'border-cyan-400/80';
+            bgColor = 'bg-cyan-500/15';
+            tagBadgeColor = 'bg-cyan-400 text-black';
             IconComponent = User;
           } else if (region.type === 'PERSISTENT_HUD') {
-            borderColor = 'border-emerald-400/80';
-            bgColor = 'bg-emerald-500/10';
-            tagBadgeColor = 'bg-emerald-400 text-slate-950';
+            borderColor = 'border-emerald-400/90';
+            bgColor = 'bg-emerald-500/15';
+            tagBadgeColor = 'bg-emerald-400 text-black';
             IconComponent = BarChart2;
           }
 
@@ -198,10 +200,10 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
             <div
               key={region.id}
               onClick={() => onRegionDwellComplete(region)}
-              className={`pointer-events-auto absolute cursor-pointer rounded-xl border-2 transition-all duration-200 ${borderColor} ${bgColor} ${
+              className={`pointer-events-auto absolute cursor-pointer rounded-lg border-2 transition-all duration-150 ${borderColor} ${bgColor} ${
                 isFocused
-                  ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-slate-950 shadow-2xl scale-[1.01]'
-                  : 'hover:border-white hover:bg-white/10'
+                  ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-black shadow-2xl scale-[1.01]'
+                  : 'hover:border-white hover:bg-white/15'
               }`}
               style={{
                 left: `${box.left * 100}%`,
@@ -211,13 +213,13 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
               }}
               role="button"
               tabIndex={0}
-              aria-label={`Select ${region.type.replace('_', ' ')}`}
+              aria-label={`Select ${region.type.replace('_', ' ')}: ${region.textContent}`}
             >
               {/* Semantic Tag Header */}
-              <div className="absolute -top-6 left-2 flex items-center gap-1.5 rounded-t-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider shadow-md">
+              <div className="absolute -top-5 left-1 flex items-center gap-1 text-[10px] font-bold shadow-md">
                 <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${tagBadgeColor}`}>
                   <IconComponent className="h-3 w-3" />
-                  <span>{region.type.replace('_', ' ')}</span>
+                  <span>{region.type === 'PERSISTENT_HUD' ? 'LIVE SCOREBOARD' : region.type.replace('_', ' ')}</span>
                 </span>
 
                 {/* HUD Pin Action Shortcut */}
@@ -227,7 +229,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
                       e.stopPropagation();
                       onPinHUD(region);
                     }}
-                    className="flex items-center gap-1 rounded bg-slate-900/90 px-1.5 py-0.5 text-emerald-400 hover:bg-emerald-400 hover:text-slate-950 transition"
+                    className="flex items-center gap-1 rounded bg-black/80 px-1.5 py-0.5 text-emerald-300 hover:bg-emerald-400 hover:text-black transition"
                     title="Pin this scoreboard to periphery"
                   >
                     <Pin className="h-2.5 w-2.5" />
@@ -239,7 +241,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
               {/* Dwell Progress Shimmer inside bounding box */}
               {isFocused && dwellProgress > 0 && (
                 <div
-                  className="absolute bottom-0 left-0 top-0 bg-amber-400/20 transition-all duration-75"
+                  className="absolute bottom-0 left-0 top-0 bg-amber-400/30 transition-all duration-75"
                   style={{ width: `${dwellProgress * 100}%` }}
                 />
               )}
@@ -248,16 +250,22 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         })}
       </div>
 
-      {/* Deltea CRT Monitor Corner Frame Brackets */}
-      <div className="pointer-events-none absolute inset-3 z-30 flex flex-col justify-between font-telemetry text-xs text-muted/60 select-none">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1">┌ [RECON_SURFACE] ────</span>
-          <span className="flex items-center gap-1">──── [OPTICAL_CONE] ┐</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1">└ // GAZE: [{Math.round(gazePoint.x)}, {Math.round(gazePoint.y)}] \\ STATE: {kinematicState}</span>
-          <span className="flex items-center gap-1">// 60 FPS GPU SHADER ┘</span>
-        </div>
+      {/* Video Overlay Playback Controls */}
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-lg bg-black/75 px-2.5 py-1.5 text-xs text-white backdrop-blur-md border border-white/10">
+        <button
+          onClick={togglePlay}
+          className="rounded px-2 py-1 font-bold hover:bg-white/20 transition text-slate-200"
+          title={isPlaying ? "Pause video" : "Play video"}
+        >
+          {isPlaying ? '⏸ Pause' : '▶ Play'}
+        </button>
+        <button
+          onClick={toggleMute}
+          className="rounded px-2 py-1 font-bold hover:bg-white/20 transition text-slate-200"
+          title={isMuted ? "Unmute audio" : "Mute audio"}
+        >
+          {isMuted ? '🔇 Unmute' : '🔊 Mute'}
+        </button>
       </div>
 
       {/* Smoothed Kalman Gaze Reticle */}

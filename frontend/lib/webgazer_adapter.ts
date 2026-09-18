@@ -31,7 +31,7 @@ class WebGazerManager {
 
     return new Promise((resolve) => {
       const script = document.createElement('script');
-      script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+      script.src = '/webgazer.js';
       script.async = true;
       script.defer = true;
       script.onload = () => {
@@ -39,9 +39,18 @@ class WebGazerManager {
         resolve(true);
       };
       script.onerror = () => {
-        console.warn('WebGazer.js script failed to load from CDN. Using synthetic/mouse gaze fallback.');
-        this.isLoaded = false;
-        resolve(false);
+        console.warn('Local webgazer.js failed, falling back to Brown CDN');
+        const fallback = document.createElement('script');
+        fallback.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+        fallback.onload = () => {
+          this.isLoaded = true;
+          resolve(true);
+        };
+        fallback.onerror = () => {
+          this.isLoaded = false;
+          resolve(false);
+        };
+        document.head.appendChild(fallback);
       };
       document.head.appendChild(script);
     });

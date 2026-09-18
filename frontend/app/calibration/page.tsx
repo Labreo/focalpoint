@@ -95,7 +95,7 @@ export default function CalibrationPage() {
   }, [isCompleted]);
 
   return (
-    <main className="relative flex h-screen w-screen flex-col items-center justify-between overflow-hidden bg-bg text-fg crt bg-grid bg-fixed p-6 select-none">
+    <main className="relative flex h-screen w-screen flex-col items-center justify-between overflow-hidden bg-bg text-fg p-6 select-none">
       {/* Top Bar */}
       <header className="flex w-full items-center justify-between border-b border-bg-3 pb-3">
         <Link

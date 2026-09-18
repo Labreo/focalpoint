@@ -14,24 +14,25 @@ export const DEMO_SCENES: DemoScene[] = [
   // Scene 1: Cricket Broadcast
   {
     id: 'cricket-match',
-    title: 'Live Sports: Cricket World Championship',
+    title: 'Live Sports: Cricket Championship Final',
     category: 'Sports Broadcast',
-    description: 'High-speed sports broadcast featuring complex numerical scoreboards, player portraits, and dynamic running commentary.',
+    description: 'Real broadcast cricket match with live lower scoreboard, batting stats, and tournament status.',
     aspectRatio: '16:9',
+    videoUrl: '/videos/cricket.mp4',
     regions: [
       {
         id: 'cricket_scoreboard_hud',
         type: 'PERSISTENT_HUD',
-        confidence: 0.98,
-        boundingBox: { left: 0.04, top: 0.04, width: 0.38, height: 0.14 },
-        textContent: 'IND 287/4  (42.3 ov) • TARGET 324 • CRR 6.75',
+        confidence: 0.99,
+        boundingBox: { left: 0.02, top: 0.81, width: 0.96, height: 0.18 },
+        textContent: 'IND 242/3 (38.4) • V. KOHLI 82* (74b) • S. IYER 44* (38b) • TARGET: 318 • CRR: 6.26 • REQ: 6.70',
         extractedMetrics: {
           team: 'IND',
-          score: '287/4',
-          overs: '42.3',
-          target: '324',
-          crr: '6.75',
-          rrr: '4.93'
+          score: '242/3',
+          overs: '38.4',
+          target: '318',
+          crr: '6.26',
+          req: '6.70'
         },
         adaptationStrategy: {
           action: 'PIN_TO_PERIPHERY',
@@ -40,48 +41,32 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'cricket_batter_face',
-        type: 'FACIAL_PORTRAIT',
-        confidence: 0.99,
-        boundingBox: { left: 0.62, top: 0.16, width: 0.28, height: 0.52 },
-        textContent: 'Batsman: V. Kohli (Focused & Calling Run)',
-        attributes: {
-          mouthOpen: true,
-          dominantEmotion: 'DETERMINED'
-        },
-        adaptationStrategy: {
-          action: 'SUPER_RESOLVE_AND_STABILIZE',
-          contrastBoost: 1.45,
-          edgeSharpen: true
-        }
-      },
-      {
-        id: 'cricket_partnership_text',
+        id: 'cricket_tournament_badge',
         type: 'TEXT_BLOCK',
-        confidence: 0.96,
-        boundingBox: { left: 0.04, top: 0.76, width: 0.54, height: 0.08 },
-        textContent: 'Partnership: 94 runs (78 balls) • V. Kohli 104* (112) • KL Rahul 48 (52)',
+        confidence: 0.98,
+        boundingBox: { left: 0.03, top: 0.04, width: 0.32, height: 0.08 },
+        textContent: 'ICC CHAMPIONS TROPHY • FINAL: INDIA vs AUSTRALIA',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.2,
+            fontSizeRem: 2.0,
             fontWeight: '800',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }
       },
       {
-        id: 'cricket_chyron_ticker',
+        id: 'cricket_projected_score',
         type: 'TEXT_BLOCK',
         confidence: 0.97,
-        boundingBox: { left: 0.04, top: 0.86, width: 0.92, height: 0.10 },
-        textContent: 'MILESTONE ALERT: Virat Kohli completes 51st ODI century with an imperious pull shot to deep mid-wicket.',
+        boundingBox: { left: 0.74, top: 0.82, width: 0.24, height: 0.14 },
+        textContent: 'PROJECTED SCORE: 328 - 345 RUNS • WIN PROBABILITY: 78% IND',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.4,
+            fontSizeRem: 2.0,
             fontWeight: '800',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
@@ -178,25 +163,26 @@ export const DEMO_SCENES: DemoScene[] = [
     }
   },
 
-  // Scene 2: Academic Medical Lecture
+  // Scene 2: Academic Medical & CS Lecture
   {
     id: 'medical-lecture',
-    title: 'Academic Lecture: Ophthalmic Neural Prosthetics',
+    title: 'Academic Lecture: Deep Learning & Computer Vision',
     category: 'Academic Lecture',
-    description: 'Detailed university presentation slide featuring complex anatomical diagrams, multi-line typography, and remote speaker camera feed.',
+    description: 'University presentation slide featuring neural network equations, PyTorch architecture code, and speaker video.',
     aspectRatio: '16:9',
+    videoUrl: '/videos/lecture.mp4',
     regions: [
       {
         id: 'lecture_title_text',
         type: 'TEXT_BLOCK',
         confidence: 0.99,
-        boundingBox: { left: 0.05, top: 0.05, width: 0.88, height: 0.12 },
-        textContent: 'NEUROLOGICAL MECHANISMS OF PREFERRED RETINAL LOCUS ADAPTATION',
+        boundingBox: { left: 0.03, top: 0.02, width: 0.88, height: 0.12 },
+        textContent: 'STANFORD CS231N: DEEP LEARNING & COMPUTER VISION — Lecture 8',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.6,
+            fontSizeRem: 2.4,
             fontWeight: '800',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
@@ -206,9 +192,9 @@ export const DEMO_SCENES: DemoScene[] = [
         id: 'lecture_speaker_face',
         type: 'FACIAL_PORTRAIT',
         confidence: 0.98,
-        boundingBox: { left: 0.68, top: 0.20, width: 0.26, height: 0.36 },
-        textContent: 'Lecturer: Prof. K. Waradkar (Explaining Ocular Saccades)',
-        attributes: { mouthOpen: true, dominantEmotion: 'THOUGHTFUL' },
+        boundingBox: { left: 0.72, top: 0.14, width: 0.24, height: 0.30 },
+        textContent: 'Presenter: Prof. Andrej Karpathy (Stanford AI Lab)',
+        attributes: { mouthOpen: true, dominantEmotion: 'ENGAGED' },
         adaptationStrategy: {
           action: 'SUPER_RESOLVE_AND_STABILIZE',
           contrastBoost: 1.40,
@@ -216,11 +202,11 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'lecture_bullet_1',
+        id: 'lecture_bullet_points',
         type: 'TEXT_BLOCK',
         confidence: 0.97,
-        boundingBox: { left: 0.05, top: 0.22, width: 0.58, height: 0.16 },
-        textContent: '1. Central Scotoma induces irreversible loss of high-density foveal cone photoreceptors.',
+        boundingBox: { left: 0.04, top: 0.21, width: 0.68, height: 0.38 },
+        textContent: '• Spatial Feature Hierarchy: Edges → Textures → Motifs → Object classes • Convolution Operation: S(i, j) = (I * K)(i, j) • ReLU Activation: max(0, x) • Spatial Pooling for Translation Invariance',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
@@ -232,209 +218,85 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'lecture_bullet_2',
+        id: 'lecture_pytorch_code',
         type: 'TEXT_BLOCK',
         confidence: 0.96,
-        boundingBox: { left: 0.05, top: 0.42, width: 0.58, height: 0.18 },
-        textContent: '2. Preferred Retinal Locus (PRL) develops spontaneously in parafoveal retina, shifting the visual axis.',
+        boundingBox: { left: 0.04, top: 0.60, width: 0.68, height: 0.26 },
+        textContent: 'self.conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1) • self.bn1 = nn.BatchNorm2d(64) • self.relu = nn.ReLU() • self.pool = nn.MaxPool2d(2, 2)',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.1,
-            fontWeight: '700',
-            highContrastTheme: 'MINT_ON_NAVY'
-          }
-        }
-      },
-      {
-        id: 'lecture_bullet_3',
-        type: 'TEXT_BLOCK',
-        confidence: 0.95,
-        boundingBox: { left: 0.05, top: 0.64, width: 0.88, height: 0.22 },
-        textContent: '3. Clinical Takeaway: Traditional magnification fails because it enlarges content inside the blind spot; semantic eccentric projection restores reading autonomy.',
-        adaptationStrategy: {
-          action: 'DYNAMIC_REFLOW',
-          typography: {
-            preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.2,
+            fontSizeRem: 2.0,
             fontWeight: '800',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }
       }
     ],
-    canvasRender: (ctx, w, h, t) => {
-      // Clean academic slide background
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, w, h);
-
-      // Top title bar
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(w * 0.04, h * 0.04, w * 0.92, h * 0.13);
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(w * 0.04, h * 0.04, w * 0.92, h * 0.13);
-
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = `bold ${Math.round(h * 0.045)}px sans-serif`;
-      ctx.fillText('NEUROLOGICAL MECHANISMS OF PREFERRED RETINAL LOCUS', w * 0.07, h * 0.12);
-
-      // Bullet Points
-      ctx.font = `${Math.round(h * 0.032)}px sans-serif`;
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillText('1. Central Scotoma induces irreversible loss of high-density foveal cones.', w * 0.07, h * 0.30);
-      ctx.fillText('2. Preferred Retinal Locus (PRL) develops spontaneously in parafoveal retina.', w * 0.07, h * 0.50);
-      ctx.fillStyle = '#fde047';
-      ctx.fillText('3. Clinical Takeaway: Traditional zoom enlarges content inside the blind spot;', w * 0.07, h * 0.72);
-      ctx.fillText('   semantic eccentric projection restores genuine visual autonomy.', w * 0.07, h * 0.78);
-
-      // Speaker Camera Inset (Right)
-      const spX = w * 0.68, spY = h * 0.20, spW = w * 0.26, spH = h * 0.36;
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(spX, spY, spW, spH);
-      ctx.strokeStyle = '#4ade80';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(spX, spY, spW, spH);
-
-      // Stylized speaker
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.arc(spX + spW * 0.5, spY + spH * 0.4, spW * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Animated mouth speaking
-      const mouthOpen = Math.sin(t * 8) > 0.2;
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(spX + spW * 0.42, spY + spH * (mouthOpen ? 0.48 : 0.46), spW * 0.16, mouthOpen ? 8 : 3);
-
-      ctx.fillStyle = '#4ade80';
-      ctx.font = `bold ${Math.round(spH * 0.10)}px monospace`;
-      ctx.fillText('● PROF. WARADKAR (LIVE)', spX + 12, spY + spH * 0.90);
-    }
+    canvasRender: (ctx, w, h, t) => {}
   },
 
   // Scene 3: Breaking News Broadcast
   {
     id: 'breaking-news',
-    title: 'Global News 24: International Infrastructure Summit',
+    title: 'Global News 24/7: Retinal Healthcare Breakthrough',
     category: 'Breaking News',
     description: 'High-density broadcast news feed with lower-third breaking ticker, financial markets telemetry HUD, and studio anchor.',
     aspectRatio: '16:9',
+    videoUrl: '/videos/news.mp4',
     regions: [
       {
-        id: 'news_markets_hud',
-        type: 'PERSISTENT_HUD',
-        confidence: 0.97,
-        boundingBox: { left: 0.04, top: 0.04, width: 0.44, height: 0.10 },
-        textContent: 'GLOBAL MARKETS: NIFTY 25,410 (+1.2%) • S&P 500 5,640 (+0.8%) • BRENT $74.20 (-0.8%)',
-        extractedMetrics: {
-          nifty: '25,410 (+1.2%)',
-          sp500: '5,640 (+0.8%)',
-          brent: '$74.20 (-0.8%)'
-        },
+        id: 'news_breaking_badge',
+        type: 'TEXT_BLOCK',
+        confidence: 0.98,
+        boundingBox: { left: 0.03, top: 0.04, width: 0.25, height: 0.08 },
+        textContent: 'BREAKING NEWS • LIVE: SPECIAL REPORT',
         adaptationStrategy: {
-          action: 'PIN_TO_PERIPHERY',
-          anchorCorner: 'TOP_RIGHT',
-          scaleFactor: 1.60
-        }
-      },
-      {
-        id: 'news_anchor_face',
-        type: 'FACIAL_PORTRAIT',
-        confidence: 0.99,
-        boundingBox: { left: 0.55, top: 0.16, width: 0.35, height: 0.58 },
-        textContent: 'News Anchor: Announcing Live Coverage',
-        attributes: { mouthOpen: true, dominantEmotion: 'SERIOUS' },
-        adaptationStrategy: {
-          action: 'SUPER_RESOLVE_AND_STABILIZE',
-          contrastBoost: 1.35,
-          edgeSharpen: true
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.0,
+            fontWeight: '800',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
         }
       },
       {
         id: 'news_breaking_banner',
         type: 'TEXT_BLOCK',
-        confidence: 0.98,
-        boundingBox: { left: 0.04, top: 0.78, width: 0.92, height: 0.18 },
-        textContent: 'BREAKING NEWS: Supreme Court issues landmark clearance for 4,500km High-Speed Renewable Grid Corridor across all major industrial states.',
+        confidence: 0.99,
+        boundingBox: { left: 0.03, top: 0.72, width: 0.94, height: 0.14 },
+        textContent: 'FDA APPROVES BREAKTHROUGH MACULAR DEGENERATION GENE THERAPY — Phase 3 clinical trials demonstrate 85% visual field retention in elderly patients',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.5,
+            fontSizeRem: 2.4,
             fontWeight: '800',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }
+      },
+      {
+        id: 'news_markets_hud',
+        type: 'PERSISTENT_HUD',
+        confidence: 0.97,
+        boundingBox: { left: 0.0, top: 0.88, width: 1.0, height: 0.12 },
+        textContent: 'MARKETS: S&P 500 5,620.4 (+1.2%) • NASDAQ 18,340.2 (+1.8%) • DOW 41,890.5 (+0.5%) • NIFTY 25,410.8 (+0.9%) • CRUDE OIL $71.40 (-1.1%)',
+        extractedMetrics: {
+          sp500: '5,620.4 (+1.2%)',
+          nasdaq: '18,340.2 (+1.8%)',
+          dow: '41,890.5 (+0.5%)'
+        },
+        adaptationStrategy: {
+          action: 'PIN_TO_PERIPHERY',
+          anchorCorner: 'BOTTOM_RIGHT',
+          scaleFactor: 1.60
+        }
       }
     ],
-    canvasRender: (ctx, w, h, t) => {
-      // News studio background
-      const studioGrad = ctx.createLinearGradient(0, 0, w, h);
-      studioGrad.addColorStop(0, '#020617');
-      studioGrad.addColorStop(0.6, '#0f172a');
-      studioGrad.addColorStop(1, '#1e1b4b');
-      ctx.fillStyle = studioGrad;
-      ctx.fillRect(0, 0, w, h);
-
-      // Studio world map backdrop
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < w; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, h * 0.75);
-        ctx.stroke();
-      }
-
-      // Markets HUD Bar (Top Left)
-      const mX = w * 0.04, mY = h * 0.04, mW = w * 0.44, mH = h * 0.10;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-      ctx.fillRect(mX, mY, mW, mH);
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(mX, mY, mW, mH);
-
-      ctx.fillStyle = '#4ade80';
-      ctx.font = `bold ${Math.round(mH * 0.38)}px monospace`;
-      ctx.fillText('NIFTY 25,410 ▲ +1.2%  •  S&P 5,640 ▲ +0.8%', mX + 16, mY + mH * 0.62);
-
-      // Anchor Silhouette / Portrait box (Center Right)
-      const aX = w * 0.55, aY = h * 0.16, aW = w * 0.35, aH = h * 0.58;
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(aX, aY, aW, aH);
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(aX, aY, aW, aH);
-
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.arc(aX + aW * 0.5, aY + aH * 0.34, aW * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Studio Blazer
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(aX + aW * 0.18, aY + aH * 0.58, aW * 0.64, aH * 0.42);
-
-      // Breaking News Chyron (Bottom)
-      const chX = w * 0.04, chY = h * 0.78, chW = w * 0.92, chH = h * 0.18;
-      ctx.fillStyle = '#b91c1c'; // Red header
-      ctx.fillRect(chX, chY, chW, chH * 0.35);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `900 ${Math.round(chH * 0.24)}px sans-serif`;
-      ctx.fillText('● BREAKING NEWS', chX + 20, chY + chH * 0.26);
-
-      ctx.fillStyle = '#050811'; // Black body
-      ctx.fillRect(chX, chY + chH * 0.35, chW, chH * 0.65);
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(chX, chY, chW, chH);
-
-      ctx.fillStyle = '#fde047';
-      ctx.font = `bold ${Math.round(chH * 0.32)}px sans-serif`;
-      ctx.fillText('Supreme Court Approves 4,500km High-Speed Renewable Grid Corridor', chX + 20, chY + chH * 0.78);
-    }
+    canvasRender: (ctx, w, h, t) => {}
   }
 ];
+

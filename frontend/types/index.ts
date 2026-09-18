@@ -124,6 +124,7 @@ export interface DemoScene {
   category: 'Sports Broadcast' | 'Academic Lecture' | 'Breaking News';
   description: string;
   aspectRatio: string;
+  videoUrl?: string;
   canvasRender: (ctx: CanvasRenderingContext2D, width: number, height: number, frameTime: number) => void;
   regions: SemanticRegion[];
 }
