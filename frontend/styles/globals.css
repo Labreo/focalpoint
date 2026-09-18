@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=JetBrains+Mono:wght@400;600;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Surface Tokens (OLED Midnight Base) */
+  --surface-canvas: #050811;
+  --surface-card: rgba(15, 23, 42, 0.85);
+  --surface-card-border: rgba(255, 255, 255, 0.12);
+  --surface-card-glow: rgba(253, 224, 71, 0.15);
+
+  /* Primary Ophthalmic Defaults (Obsidian Amber) */
+  --text-primary-high: #FDE047;
+  --text-secondary-high: #FEF08A;
+  --accent-gaze-reticle: #38BDF8;
+  --accent-fixation-ring: #FDE047;
+  --accent-active-hud: #4ADE80;
+
+  /* Font Scales */
+  --font-scale-base: 1.0;
+}
+
+/* Ophthalmic Contrast Palette Presets */
+.theme-amber {
+  --text-primary-high: #FDE047;
+  --text-secondary-high: #FEF08A;
+  --surface-canvas: #050811;
+  --surface-card: rgba(15, 23, 42, 0.90);
+  --surface-card-border: rgba(253, 224, 71, 0.35);
+  --accent-fixation-ring: #FDE047;
+}
+
+.theme-cyan {
+  --text-primary-high: #38BDF8;
+  --text-secondary-high: #BAE6FD;
+  --surface-canvas: #050811;
+  --surface-card: rgba(15, 23, 42, 0.90);
+  --surface-card-border: rgba(56, 189, 248, 0.35);
+  --accent-fixation-ring: #38BDF8;
+}
+
+.theme-mint {
+  --text-primary-high: #4ADE80;
+  --text-secondary-high: #BBF7D0;
+  --surface-canvas: #070D18;
+  --surface-card: rgba(15, 23, 42, 0.90);
+  --surface-card-border: rgba(74, 222, 128, 0.35);
+  --accent-fixation-ring: #4ADE80;
+}
+
+.theme-invert {
+  --text-primary-high: #050811;
+  --text-secondary-high: #1E293B;
+  --surface-canvas: #F8FAFC;
+  --surface-card: rgba(241, 245, 249, 0.95);
+  --surface-card-border: rgba(5, 8, 17, 0.40);
+  --accent-fixation-ring: #0284C7;
+}
+
+body {
+  background-color: var(--surface-canvas);
+  color: var(--text-primary-high);
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Saccadic Motion Blanking */
+.saccade-blanking {
+  transition: opacity 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.saccade-active {
+  opacity: 0.25 !important;
+  filter: blur(1px);
+}
+
+/* Atkinson Hyperlegible Typography Helpers */
+.font-atkinson {
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+}
+
+.font-telemetry {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbar for Accessibility Drawers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(5, 8, 17, 0.8);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-primary-high);
+  border-radius: 4px;
+}
