@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const awsApiUrl = process.env.AWS_API_GATEWAY_URL || process.env.NEXT_PUBLIC_AWS_API_URL;
+    const awsApiUrl = (process.env.AWS_API_GATEWAY_URL || process.env.NEXT_PUBLIC_AWS_API_URL || '').replace(/\/+$/, '');
 
     // If real AWS API Gateway URL is configured, forward to AWS Lambda orchestrator
     if (awsApiUrl) {

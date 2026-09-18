@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing 'text' parameter" }, { status: 400 });
     }
 
-    const awsApiUrl = process.env.AWS_API_GATEWAY_URL || process.env.NEXT_PUBLIC_AWS_API_URL;
+    const awsApiUrl = (process.env.AWS_API_GATEWAY_URL || process.env.NEXT_PUBLIC_AWS_API_URL || '').replace(/\/+$/, '');
 
     if (awsApiUrl) {
       try {
