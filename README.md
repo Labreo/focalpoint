@@ -1,9 +1,11 @@
 # FocalPoint: Gaze-Driven Semantic Media Adaptation for Low Vision
 
 > **Hackathon Submission**: Bharat Builds Tour — First Commit (September 17–20, 2026)  
-> **Tracks**: Cloud Track & Open Source Track  
+> **Track**: Track 2: "Ship It" (Deployed Live on AWS) — Grand Prize Contender  
+> **Live Web Application**: [https://main.d1s5otc6zch586.amplifyapp.com](https://main.d1s5otc6zch586.amplifyapp.com)  
+> **Live AWS API Gateway**: `https://xxeqb4odra.execute-api.us-east-1.amazonaws.com/prod`  
 > **Lead Architect**: Kanak Sanjay Waradkar ([@Labreo](https://github.com/Labreo))  
-> **Repository**: Private Development Hub (`Labreo/focalpoint`)  
+> **Repository**: [https://github.com/Labreo/focalpoint](https://github.com/Labreo/focalpoint)  
 
 ---
 
@@ -352,7 +354,13 @@ sam build
 sam deploy --guided
 ```
 
-### 3. Frontend Application (Next.js 15)
+### 3. Frontend Application & AWS Amplify Hosting
+The Next.js 15 frontend is deployed live on **AWS Amplify Hosting** with direct global CloudFront distribution:
+- **Live URL**: [https://main.d1s5otc6zch586.amplifyapp.com](https://main.d1s5otc6zch586.amplifyapp.com)
+- **App ID**: `d1s5otc6zch586` (Region: `us-east-1`)
+- **Compute Platform**: `WEB_COMPUTE` (Next.js 15 App Router SSR)
+
+To run locally in development:
 ```bash
 cd frontend
 
