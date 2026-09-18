@@ -11,41 +11,54 @@
 import { DemoScene, SemanticRegion } from '../types';
 
 export const DEMO_SCENES: DemoScene[] = [
-  // Scene 1: Cricket Broadcast
+  // Scene 1: Real Amateur Cricket Match (CricHeroes)
   {
     id: 'cricket-match',
-    title: 'Live Sports: Cricket Championship Final',
+    title: 'Amateur Cricket: CricHeroes Spartan Warriors Match',
     category: 'Sports Broadcast',
-    description: 'Real broadcast cricket match with live lower scoreboard, batting stats, and tournament status.',
+    description: 'Real match broadcast from CricHeroes featuring Spartan Warriors batting at 84/4 with live scorebar, required run rate, and over balls.',
     aspectRatio: '16:9',
     videoUrl: '/videos/cricket.mp4',
     regions: [
       {
-        id: 'cricket_scoreboard_hud',
+        id: 'cricket_spartan_score',
         type: 'PERSISTENT_HUD',
         confidence: 0.99,
-        boundingBox: { left: 0.02, top: 0.81, width: 0.96, height: 0.18 },
-        textContent: 'IND 242/3 (38.4) • V. KOHLI 82* (74b) • S. IYER 44* (38b) • TARGET: 318 • CRR: 6.26 • REQ: 6.70',
+        boundingBox: { left: 0.01, top: 0.86, width: 0.38, height: 0.07 },
+        textContent: 'SPARTAN WARRIORS: 84/4 (10.0 Ov)',
         extractedMetrics: {
-          team: 'IND',
-          score: '242/3',
-          overs: '38.4',
-          target: '318',
-          crr: '6.26',
-          req: '6.70'
+          team: 'SPARTAN WARRIORS',
+          score: '84/4',
+          overs: '10.0'
         },
         adaptationStrategy: {
           action: 'PIN_TO_PERIPHERY',
           anchorCorner: 'BOTTOM_RIGHT',
-          scaleFactor: 1.75
+          scaleFactor: 1.80
         }
       },
       {
-        id: 'cricket_tournament_badge',
+        id: 'cricket_batsmen_stats',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        boundingBox: { left: 0.42, top: 0.86, width: 0.34, height: 0.07 },
+        textContent: 'SRIHARI: 17 (17)* • VENKATES: 9 (9)',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.2,
+            fontWeight: '800',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'cricket_bowler_figures',
         type: 'TEXT_BLOCK',
         confidence: 0.98,
-        boundingBox: { left: 0.03, top: 0.04, width: 0.32, height: 0.08 },
-        textContent: 'ICC CHAMPIONS TROPHY • FINAL: INDIA vs AUSTRALIA',
+        boundingBox: { left: 0.78, top: 0.86, width: 0.20, height: 0.07 },
+        textContent: 'BOWLER: YESHWAN (0-0)',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
@@ -57,127 +70,72 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'cricket_projected_score',
+        id: 'cricket_equation_crr',
         type: 'TEXT_BLOCK',
-        confidence: 0.97,
-        boundingBox: { left: 0.74, top: 0.82, width: 0.24, height: 0.14 },
-        textContent: 'PROJECTED SCORE: 328 - 345 RUNS • WIN PROBABILITY: 78% IND',
+        confidence: 0.99,
+        boundingBox: { left: 0.01, top: 0.94, width: 0.48, height: 0.05 },
+        textContent: 'CURRENT RR: 8.40 • REQ RR: 6.60 • NEED 66 RUNS IN 60 BALLS',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.2,
+            fontWeight: '800',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'cricket_over_balls',
+        type: 'TEXT_BLOCK',
+        confidence: 0.96,
+        boundingBox: { left: 0.76, top: 0.94, width: 0.23, height: 0.05 },
+        textContent: 'THIS OVER: 0 • wd • 0 • 1 • 1',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
             fontSizeRem: 2.0,
             fontWeight: '800',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'cricket_channel_badge',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        boundingBox: { left: 0.83, top: 0.03, width: 0.16, height: 0.07 },
+        textContent: 'CRICHEROES LIVE STREAM',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.8,
+            fontWeight: '700',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }
       }
     ],
-    canvasRender: (ctx, w, h, t) => {
-      // Stadium background gradient
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-      bgGrad.addColorStop(0, '#0a1d37');
-      bgGrad.addColorStop(0.5, '#1e3a5f');
-      bgGrad.addColorStop(0.85, '#19543e');
-      bgGrad.addColorStop(1, '#0e3829');
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, w, h);
-
-      // Floodlights
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-      ctx.beginPath();
-      ctx.arc(w * 0.15, h * 0.1, 140, 0, Math.PI * 2);
-      ctx.arc(w * 0.85, h * 0.1, 140, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pitch oval
-      ctx.fillStyle = '#1c6b4b';
-      ctx.beginPath();
-      ctx.ellipse(w * 0.5, h * 0.65, w * 0.42, h * 0.28, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Batsman Silhouette / Portrait box (Right side)
-      const faceBox = { x: w * 0.62, y: h * 0.16, bw: w * 0.28, bh: h * 0.52 };
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(faceBox.x, faceBox.y, faceBox.bw, faceBox.bh);
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(faceBox.x, faceBox.y, faceBox.bw, faceBox.bh);
-
-      // Stylized player face
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.arc(faceBox.x + faceBox.bw * 0.5, faceBox.y + faceBox.bh * 0.38, faceBox.bw * 0.26, 0, Math.PI * 2);
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fill();
-
-      // Helmet & Visor
-      ctx.fillStyle = '#1e3a8a';
-      ctx.beginPath();
-      ctx.arc(faceBox.x + faceBox.bw * 0.5, faceBox.y + faceBox.bh * 0.35, faceBox.bw * 0.28, Math.PI, 0);
-      ctx.fill();
-
-      // Jersey
-      ctx.fillStyle = '#1d4ed8';
-      ctx.fillRect(faceBox.x + faceBox.bw * 0.15, faceBox.y + faceBox.bh * 0.65, faceBox.bw * 0.7, faceBox.bh * 0.35);
-
-      // Scoreboard Card (Top Left)
-      const sbX = w * 0.04, sbY = h * 0.04, sbW = w * 0.38, sbH = h * 0.14;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
-      ctx.fillRect(sbX, sbY, sbW, sbH);
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(sbX, sbY, sbW, sbH);
-
-      ctx.fillStyle = '#fde047';
-      ctx.font = `bold ${Math.round(sbH * 0.38)}px monospace`;
-      ctx.fillText('IND 287/4  (42.3 ov)', sbX + 16, sbY + sbH * 0.45);
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = `${Math.round(sbH * 0.24)}px monospace`;
-      ctx.fillText('TARGET: 324  |  CRR: 6.75  |  RRR: 4.93', sbX + 16, sbY + sbH * 0.82);
-
-      // Partnership Graphic (Bottom Left)
-      const ptX = w * 0.04, ptY = h * 0.76, ptW = w * 0.54, ptH = h * 0.08;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.fillRect(ptX, ptY, ptW, ptH);
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = `bold ${Math.round(ptH * 0.42)}px sans-serif`;
-      ctx.fillText('Partnership: 94 (78b) • Kohli 104* (112) • Rahul 48 (52)', ptX + 14, ptY + ptH * 0.65);
-
-      // Lower Third News/Milestone Ticker
-      const tkX = w * 0.04, tkY = h * 0.86, tkW = w * 0.92, tkH = h * 0.10;
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(tkX, tkY, tkW, tkH);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(tkX, tkY, tkW * 0.18, tkH);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${Math.round(tkH * 0.40)}px sans-serif`;
-      ctx.fillText('MILESTONE', tkX + 16, tkY + tkH * 0.64);
-
-      ctx.fillStyle = '#fde047';
-      ctx.font = `${Math.round(tkH * 0.34)}px sans-serif`;
-      const scrollOffset = (t * 40) % (tkW * 0.6);
-      ctx.fillText('Virat Kohli completes 51st ODI century with an imperious pull to deep mid-wicket.', tkX + tkW * 0.20 - (scrollOffset * 0.1), tkY + tkH * 0.64);
-    }
+    canvasRender: (ctx, w, h, t) => {}
   },
 
-  // Scene 2: Academic Medical & CS Lecture
+  // Scene 2: Real AWS re:Invent Technical Lecture
   {
     id: 'medical-lecture',
-    title: 'Academic Lecture: Deep Learning & Computer Vision',
+    title: 'AWS re:Invent 2025: Advanced RAG & Agentic Architectures',
     category: 'Academic Lecture',
-    description: 'University presentation slide featuring neural network equations, PyTorch architecture code, and speaker video.',
+    description: 'Real session footage from AWS re:Invent 2025 (NTA403) presenting generative AI, Bedrock KnowledgeBases, and agentic workflows.',
     aspectRatio: '16:9',
     videoUrl: '/videos/lecture.mp4',
     regions: [
       {
-        id: 'lecture_title_text',
+        id: 'aws_lecture_agenda_title',
         type: 'TEXT_BLOCK',
-        confidence: 0.99,
-        boundingBox: { left: 0.03, top: 0.02, width: 0.88, height: 0.12 },
-        textContent: 'STANFORD CS231N: DEEP LEARNING & COMPUTER VISION — Lecture 8',
+        confidence: 1.0,
+        boundingBox: { left: 0.03, top: 0.05, width: 0.22, height: 0.08 },
+        textContent: 'Agenda: Advanced RAG Architectures',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
@@ -189,46 +147,97 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'lecture_speaker_face',
-        type: 'FACIAL_PORTRAIT',
-        confidence: 0.98,
-        boundingBox: { left: 0.72, top: 0.14, width: 0.24, height: 0.30 },
-        textContent: 'Presenter: Prof. Andrej Karpathy (Stanford AI Lab)',
-        attributes: { mouthOpen: true, dominantEmotion: 'ENGAGED' },
-        adaptationStrategy: {
-          action: 'SUPER_RESOLVE_AND_STABILIZE',
-          contrastBoost: 1.40,
-          edgeSharpen: true
-        }
-      },
-      {
-        id: 'lecture_bullet_points',
+        id: 'aws_lecture_item_1',
         type: 'TEXT_BLOCK',
-        confidence: 0.97,
-        boundingBox: { left: 0.04, top: 0.21, width: 0.68, height: 0.38 },
-        textContent: '• Spatial Feature Hierarchy: Edges → Textures → Motifs → Object classes • Convolution Operation: S(i, j) = (I * K)(i, j) • ReLU Activation: max(0, x) • Spatial Pooling for Translation Invariance',
+        confidence: 0.999,
+        boundingBox: { left: 0.03, top: 0.19, width: 0.60, height: 0.07 },
+        textContent: '01: What to expect from the code talk session',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.1,
+            fontSizeRem: 2.2,
             fontWeight: '700',
-            highContrastTheme: 'MINT_ON_NAVY'
+            highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }
       },
       {
-        id: 'lecture_pytorch_code',
+        id: 'aws_lecture_item_2',
         type: 'TEXT_BLOCK',
-        confidence: 0.96,
-        boundingBox: { left: 0.04, top: 0.60, width: 0.68, height: 0.26 },
-        textContent: 'self.conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1) • self.bn1 = nn.BatchNorm2d(64) • self.relu = nn.ReLU() • self.pool = nn.MaxPool2d(2, 2)',
+        confidence: 0.997,
+        boundingBox: { left: 0.03, top: 0.34, width: 0.72, height: 0.07 },
+        textContent: '02: Quick overview of Amazon Bedrock KnowledgeBases',
         adaptationStrategy: {
           action: 'DYNAMIC_REFLOW',
           typography: {
             preferredFont: 'Atkinson-Hyperlegible',
-            fontSizeRem: 2.0,
+            fontSizeRem: 2.2,
             fontWeight: '800',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'aws_lecture_item_3',
+        type: 'TEXT_BLOCK',
+        confidence: 0.999,
+        boundingBox: { left: 0.03, top: 0.49, width: 0.40, height: 0.07 },
+        textContent: '03: Advance RAG Techniques',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.2,
+            fontWeight: '700',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'aws_lecture_item_4',
+        type: 'TEXT_BLOCK',
+        confidence: 0.998,
+        boundingBox: { left: 0.03, top: 0.64, width: 0.35, height: 0.07 },
+        textContent: '04: Code walkthrough & implementation',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.2,
+            fontWeight: '700',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'aws_lecture_item_5',
+        type: 'TEXT_BLOCK',
+        confidence: 0.997,
+        boundingBox: { left: 0.03, top: 0.79, width: 0.35, height: 0.07 },
+        textContent: '05: Further your learning with AWS generative AI',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.2,
+            fontWeight: '700',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'aws_lecture_copyright',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        boundingBox: { left: 0.04, top: 0.92, width: 0.35, height: 0.05 },
+        textContent: 'aws • © 2025, Amazon Web Services, Inc. or its affiliates. All rights reserved.',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.8,
+            fontWeight: '600',
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }

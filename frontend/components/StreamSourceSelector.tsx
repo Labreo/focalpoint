@@ -37,9 +37,10 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
             : 'text-slate-300 hover:bg-slate-800 hover:text-white'
         }`}
         aria-pressed={currentMode === 'DEMO_CRICKET'}
+        title="Real CricHeroes amateur cricket match footage with live scorebar"
       >
         <Trophy className="h-3.5 w-3.5" />
-        <span>Cricket Match (Scoreboard)</span>
+        <span>🏏 Amateur Cricket (CricHeroes)</span>
       </button>
 
       {/* Demo 2: Lecture */}
@@ -51,9 +52,10 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
             : 'text-slate-300 hover:bg-slate-800 hover:text-white'
         }`}
         aria-pressed={currentMode === 'DEMO_LECTURE'}
+        title="Real AWS re:Invent 2025 technical lecture on Advanced RAG & Bedrock"
       >
         <BookOpen className="h-3.5 w-3.5" />
-        <span>Tech Lecture (Slides)</span>
+        <span>☁️ AWS re:Invent (Bedrock RAG)</span>
       </button>
 
       {/* Demo 3: News */}
@@ -65,9 +67,10 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
             : 'text-slate-300 hover:bg-slate-800 hover:text-white'
         }`}
         aria-pressed={currentMode === 'DEMO_NEWS'}
+        title="24/7 Global news broadcast with breaking ticker"
       >
         <Newspaper className="h-3.5 w-3.5" />
-        <span>Breaking News (Chyron)</span>
+        <span>📰 Breaking News (Ticker)</span>
       </button>
 
       <span className="text-slate-700">|</span>
@@ -80,11 +83,11 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
             ? 'bg-cyan-400 text-black shadow-sm'
             : 'text-cyan-400 hover:bg-slate-800'
         }`}
-        title="Share any Chrome tab playing a real YouTube video or remote stream"
+        title="Share any browser tab or window playing a real YouTube video to test live"
         aria-pressed={currentMode === 'SCREEN_CAPTURE'}
       >
         <Monitor className="h-3.5 w-3.5" />
-        <span>Screen Share (YouTube)</span>
+        <span>🖥️ Screen Share (Any YouTube Tab)</span>
       </button>
 
       {/* Upload File */}
