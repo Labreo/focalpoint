@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SemanticRegion, ContrastPreset } from '../types';
 import { Volume2, X, ZoomIn, ZoomOut, Palette, CheckCircle2 } from 'lucide-react';
 import { audioHaptics } from '../lib/synthetic_audio';
@@ -25,45 +25,88 @@ export const ReflowDrawer: React.FC<ReflowDrawerProps> = ({
   onClose
 }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopPlayback = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+    setIsLoadingAudio(false);
+  };
 
   useEffect(() => {
     // Reset speaking state if region changes
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
+    stopPlayback();
   }, [region?.id]);
 
   if (!isOpen || !region || region.type !== 'TEXT_BLOCK') {
     return null;
   }
 
-  const handleTTS = () => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+  const handleTTS = async () => {
+    if (isSpeaking || isLoadingAudio) {
+      stopPlayback();
       return;
     }
 
     const textToRead = region.textContent || '';
     if (!textToRead) return;
 
-    const utterance = new SpeechSynthesisUtterance(textToRead);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    setIsLoadingAudio(true);
 
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
+    try {
+      // 1. Attempt AWS Polly Neural Speech Synthesis
+      const res = await fetch('/api/speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToRead, voiceId: 'Ruth' })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.audioBase64) {
+          const audio = new Audio(`data:audio/mp3;base64,${data.audioBase64}`);
+          audioRef.current = audio;
+          audio.onended = () => {
+            setIsSpeaking(false);
+            audioRef.current = null;
+          };
+          audio.onerror = () => {
+            stopPlayback();
+          };
+          await audio.play();
+          setIsSpeaking(true);
+          setIsLoadingAudio(false);
+          return;
+        }
+      }
+    } catch {
+      // Fallback to Web Speech API
+    }
+
+    setIsLoadingAudio(false);
+
+    // 2. Client Fallback via Web Speech API
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(textToRead);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    }
   };
 
   const handleClose = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopPlayback();
     audioHaptics.playDismissPop();
     onClose();
   };
@@ -97,12 +140,14 @@ export const ReflowDrawer: React.FC<ReflowDrawerProps> = ({
               className={`flex items-center gap-2 rounded-lg px-4 py-2 font-atkinson text-sm font-bold transition ${
                 isSpeaking
                   ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/40'
+                  : isLoadingAudio
+                  ? 'bg-amber-400/20 text-amber-highlight border border-amber-400/30'
                   : 'bg-white/10 text-white hover:bg-white/20'
               }`}
               aria-label={isSpeaking ? 'Stop reading aloud' : 'Read reflowed text aloud'}
             >
-              <Volume2 className={`h-5 w-5 ${isSpeaking ? 'animate-bounce' : ''}`} />
-              <span>{isSpeaking ? 'Speaking...' : 'Read Aloud'}</span>
+              <Volume2 className={`h-5 w-5 ${isSpeaking ? 'animate-bounce' : isLoadingAudio ? 'animate-pulse' : ''}`} />
+              <span>{isSpeaking ? 'Speaking...' : isLoadingAudio ? 'Synthesizing...' : 'Read Aloud'}</span>
             </button>
 
             {/* Font Scale Down */}

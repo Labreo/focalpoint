@@ -23,6 +23,9 @@ interface TelemetryBarProps {
   simulatorActive: boolean;
   onToggleSimulator: () => void;
   onOpenHelp: () => void;
+  isWebGazerActive?: boolean;
+  onToggleWebGazer?: () => void;
+  isAnalyzing?: boolean;
 }
 
 export const TelemetryBar: React.FC<TelemetryBarProps> = ({
@@ -34,7 +37,10 @@ export const TelemetryBar: React.FC<TelemetryBarProps> = ({
   onPathologyChange,
   simulatorActive,
   onToggleSimulator,
-  onOpenHelp
+  onOpenHelp,
+  isWebGazerActive = false,
+  onToggleWebGazer,
+  isAnalyzing = false
 }) => {
   return (
     <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-950/90 px-4 py-2.5 backdrop-blur-md">
@@ -73,11 +79,32 @@ export const TelemetryBar: React.FC<TelemetryBarProps> = ({
           <span>{kinematicState} ({gazeLatencyMs}ms)</span>
         </div>
 
-        {/* AWS Fan-Out Latency */}
-        <div className="flex items-center gap-1 rounded-lg bg-white/5 px-2.5 py-1 text-slate-300">
-          <Cloud className="h-3.5 w-3.5 text-amber-highlight" />
-          <span>AWS: {awsLatencyMs}ms</span>
+        {/* AWS Fan-Out Latency & Differential Ingestion Indicator */}
+        <div className={`flex items-center gap-1 rounded-lg px-2.5 py-1 ${
+          isAnalyzing
+            ? 'border border-amber-400/40 bg-amber-400/20 text-amber-highlight animate-pulse'
+            : 'bg-white/5 text-slate-300'
+        }`}>
+          <Cloud className={`h-3.5 w-3.5 ${isAnalyzing ? 'animate-bounce text-amber-highlight' : 'text-amber-highlight'}`} />
+          <span>{isAnalyzing ? 'AWS: Fan-Out...' : `AWS: ${awsLatencyMs}ms`}</span>
         </div>
+
+        {/* WebGazer Webcam Eye-Tracker Toggle */}
+        {onToggleWebGazer && (
+          <button
+            onClick={onToggleWebGazer}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-atkinson text-xs font-bold transition ${
+              isWebGazerActive
+                ? 'border border-emerald-400/50 bg-emerald-500/20 text-emerald-400 shadow-sm shadow-emerald-500/30'
+                : 'border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+            }`}
+            title="Toggle WebGazer Webcam Eye Tracking"
+            aria-pressed={isWebGazerActive}
+          >
+            <span className={`h-2 w-2 rounded-full ${isWebGazerActive ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`} />
+            <span>{isWebGazerActive ? 'WebGazer: ACTIVE' : 'WebGazer: OFF'}</span>
+          </button>
+        )}
       </div>
 
       {/* Pathology Selector & Controls */}

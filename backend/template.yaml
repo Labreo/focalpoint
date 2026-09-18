@@ -97,6 +97,12 @@ Resources:
                 - "bedrock:InvokeModel"
                 - "bedrock:Converse"
               Resource: "*"
+        # Amazon Polly Neural Text-to-Speech
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "polly:SynthesizeSpeech"
+              Resource: "*"
         # S3 Ephemeral Frame Bucket Access
         - S3CrudPolicy:
             BucketName: !Sub "focalpoint-frames-${AWS::AccountId}-${AWS::Region}"
@@ -115,6 +121,12 @@ Resources:
           Properties:
             RestApiId: !Ref FocalPointApi
             Path: /api/v1/analyze-frame
+            Method: post
+        SynthesizeSpeech:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FocalPointApi
+            Path: /api/v1/synthesize-speech
             Method: post
         GetProfile:
           Type: Api

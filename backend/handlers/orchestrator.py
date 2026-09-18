@@ -22,6 +22,7 @@ from rekognition_client import detect_faces, detect_text_lines
 from bedrock_client import classify_scene_elements
 from synthesizer import merge_semantic_regions
 from user_profile import get_profile, save_profile
+from polly_client import synthesize_speech_mp3
 
 # Configure logging
 logger = logging.getLogger()
@@ -37,6 +38,7 @@ if boto3 and Config:
         )
         rekog_client = boto3.client("rekognition", config=boto_config)
         bedrock_client = boto3.client("bedrock-runtime", config=boto_config)
+        polly_client = boto3.client("polly", config=boto_config)
         dynamodb_resource = boto3.resource("dynamodb", config=boto_config)
         user_table = dynamodb_resource.Table(os.environ.get("USER_PROFILES_TABLE", "FocalPoint_UserProfiles"))
         cloudwatch_client = boto3.client("cloudwatch", config=boto_config)
@@ -44,12 +46,14 @@ if boto3 and Config:
         logger.warning(f"AWS Client initialization warning: {init_err}")
         rekog_client = None
         bedrock_client = None
+        polly_client = None
         dynamodb_resource = None
         user_table = None
         cloudwatch_client = None
 else:
     rekog_client = None
     bedrock_client = None
+    polly_client = None
     dynamodb_resource = None
     user_table = None
     cloudwatch_client = None
@@ -105,6 +109,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "statusCode": 400,
                 "headers": CORS_HEADERS,
                 "body": json.dumps({"error": f"Invalid profile payload: {err}"})
+            }
+
+    # Route: POST /api/v1/synthesize-speech
+    if http_method == "POST" and "/api/v1/synthesize-speech" in path:
+        try:
+            body = json.loads(event.get("body", "{}"))
+            text = body.get("text", "")
+            voice_id = body.get("voiceId", "Joanna")
+            if not text:
+                return {
+                    "statusCode": 400,
+                    "headers": CORS_HEADERS,
+                    "body": json.dumps({"error": "Missing 'text' in request body"})
+                }
+            audio_b64 = synthesize_speech_mp3(polly_client, text, voice_id)
+            return {
+                "statusCode": 200,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({
+                    "audioBase64": audio_b64,
+                    "format": "mp3",
+                    "voiceId": voice_id
+                })
+            }
+        except Exception as p_err:
+            return {
+                "statusCode": 500,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"error": f"Speech synthesis failed: {p_err}"})
             }
 
     # Route: POST /api/v1/analyze-frame

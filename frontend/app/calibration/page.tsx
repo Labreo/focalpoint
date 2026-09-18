@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Crosshair, ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react';
 import { audioHaptics } from '../../lib/synthetic_audio';
+import { webGazerManager } from '../../lib/webgazer_adapter';
 
 interface CalibrationPoint {
   id: number;
@@ -30,6 +31,18 @@ export default function CalibrationPage() {
   const [pointProgress, setPointProgress] = useState<number>(0);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [accuracyScore, setAccuracyScore] = useState<string>('0.82° (~38px)');
+  const [webcamEnabled, setWebcamEnabled] = useState<boolean>(false);
+
+  // Initialize WebGazer on mount
+  useEffect(() => {
+    webGazerManager.start((x, y) => {}).then(started => {
+      setWebcamEnabled(started);
+    });
+
+    return () => {
+      webGazerManager.pause();
+    };
+  }, []);
 
   // Dwell countdown effect on active calibration point
   useEffect(() => {
@@ -40,6 +53,14 @@ export default function CalibrationPage() {
         if (prev >= 100) {
           // Play harmonic confirmation chord
           audioHaptics.playCalibrationSuccess();
+
+          // Record calibration coordinate to WebGazer
+          if (typeof window !== 'undefined') {
+            const pt = CALIBRATION_POINTS[currentPointIndex];
+            const pxX = (window.innerWidth * pt.xPercent) / 100;
+            const pxY = (window.innerHeight * pt.yPercent) / 100;
+            webGazerManager.recordCalibrationPoint(pxX, pxY);
+          }
 
           if (currentPointIndex + 1 < CALIBRATION_POINTS.length) {
             setCurrentPointIndex((idx) => idx + 1);

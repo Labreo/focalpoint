@@ -24,6 +24,7 @@ interface AdaptiveViewportProps {
   onPinHUD: (region: SemanticRegion) => void;
   isFrozen: boolean;
   onMouseMoveSimulate?: (x: number, y: number) => void;
+  onSourceRef?: (source: HTMLCanvasElement | HTMLVideoElement | null) => void;
 }
 
 export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
@@ -38,11 +39,23 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   onRegionDwellComplete,
   onPinHUD,
   isFrozen,
-  onMouseMoveSimulate
+  onMouseMoveSimulate,
+  onSourceRef
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Notify parent of active media source for differential engine
+  useEffect(() => {
+    if (onSourceRef) {
+      if (mediaStream && videoRef.current) {
+        onSourceRef(videoRef.current);
+      } else if (canvasRef.current) {
+        onSourceRef(canvasRef.current);
+      }
+    }
+  }, [mediaStream, demoScene, onSourceRef]);
 
   const [viewportSize, setViewportSize] = useState({ width: 1280, height: 720 });
 

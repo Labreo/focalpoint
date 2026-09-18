@@ -12,6 +12,9 @@ import { DEMO_SCENES } from '../lib/demo_scenes';
 import { GazeKalmanFilter2D } from '../lib/kalman_filter';
 import { KinematicIntentClassifier } from '../lib/eye_kinematics';
 import { audioHaptics } from '../lib/synthetic_audio';
+import { webGazerManager } from '../lib/webgazer_adapter';
+import { TemporalDifferentialEngine } from '../lib/differential_engine';
+import { focalPointClient } from '../lib/aws_client';
 import { TelemetryBar } from '../components/TelemetryBar';
 import { StreamSourceSelector, StreamMode } from '../components/StreamSourceSelector';
 import { AdaptiveViewport } from '../components/AdaptiveViewport';
@@ -64,12 +67,16 @@ export default function AdaptiveViewerPage() {
   const [gazeLatencyMs, setGazeLatencyMs] = useState<number>(16);
   const [awsLatencyMs, setAwsLatencyMs] = useState<number>(620);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
+  const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
   // Math references (persist across renders)
   const kalmanFilterRef = useRef<GazeKalmanFilter2D>(new GazeKalmanFilter2D(0.08, 18.0));
   const intentClassifierRef = useRef<KinematicIntentClassifier>(
     new KinematicIntentClassifier(DEFAULT_PATHOLOGY.dwellThresholdMs, DEFAULT_PATHOLOGY.maxDispersionPx)
   );
+  const differentialEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.15, 4000));
+  const activeSourceRef = useRef<HTMLCanvasElement | HTMLVideoElement | null>(null);
   const frameCountRef = useRef<number>(0);
   const lastFpsTimeRef = useRef<number>(performance.now());
 
@@ -178,6 +185,94 @@ export default function AdaptiveViewerPage() {
     setRawGaze({ x, y });
     handleProcessGaze(x, y);
   };
+
+  // Toggle WebGazer Live Eye Tracking
+  const handleToggleWebGazer = async () => {
+    if (isWebGazerActive) {
+      webGazerManager.stop();
+      setIsWebGazerActive(false);
+    } else {
+      try {
+        const initialized = await webGazerManager.init();
+        if (initialized) {
+          webGazerManager.start((x, y) => {
+            setRawGaze({ x, y });
+            handleProcessGaze(x, y);
+          });
+          setIsWebGazerActive(true);
+        }
+      } catch (err) {
+        console.warn('Failed to start WebGazer eye tracking:', err);
+      }
+    }
+  };
+
+  // Cleanup WebGazer on unmount
+  useEffect(() => {
+    return () => {
+      webGazerManager.stop();
+    };
+  }, []);
+
+  // Edge-Computed Temporal Differential Ingestion Loop (1-2 FPS)
+  useEffect(() => {
+    if (isFrozen) return;
+
+    const intervalId = setInterval(async () => {
+      const source = activeSourceRef.current;
+      if (!source || isAnalyzing) return;
+
+      const evaluation = differentialEngineRef.current.evaluateFrame(source);
+      if (evaluation.shouldAnalyze) {
+        setIsAnalyzing(true);
+        try {
+          let base64Jpeg = '';
+          let width = 1920;
+          let height = 1080;
+
+          if (source instanceof HTMLCanvasElement) {
+            width = source.width;
+            height = source.height;
+            base64Jpeg = source.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
+          } else if (source instanceof HTMLVideoElement && source.videoWidth > 0) {
+            width = source.videoWidth;
+            height = source.videoHeight;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            if (tempCtx) {
+              tempCtx.drawImage(source, 0, 0, width, height);
+              base64Jpeg = tempCanvas.toDataURL('image/jpeg', 0.85).split(',')[1] || '';
+            }
+          }
+
+          if (base64Jpeg) {
+            const result = await focalPointClient.analyzeFrame(
+              base64Jpeg,
+              width,
+              height,
+              'usr_kanak_001',
+              evaluation.reason.toLowerCase()
+            );
+
+            if (result.regions && result.regions.length > 0) {
+              setSemanticRegions(result.regions);
+            }
+            if (result.processingLatencyMs) {
+              setAwsLatencyMs(result.processingLatencyMs);
+            }
+          }
+        } catch (err) {
+          console.warn('Differential frame dispatch failed:', err);
+        } finally {
+          setIsAnalyzing(false);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isFrozen, isAnalyzing]);
 
   // Keyboard Shortcuts & Numpad 1–9 Matrix
   useEffect(() => {
@@ -330,6 +425,9 @@ export default function AdaptiveViewerPage() {
         simulatorActive={simulatorActive}
         onToggleSimulator={() => setSimulatorActive(prev => !prev)}
         onOpenHelp={() => setIsHelpModalOpen(true)}
+        isWebGazerActive={isWebGazerActive}
+        onToggleWebGazer={handleToggleWebGazer}
+        isAnalyzing={isAnalyzing}
       />
 
       {/* Stream Source Selector Sub-Bar */}
@@ -377,6 +475,9 @@ export default function AdaptiveViewerPage() {
           }}
           isFrozen={isFrozen}
           onMouseMoveSimulate={handleMouseMoveSimulate}
+          onSourceRef={(source) => {
+            activeSourceRef.current = source;
+          }}
         />
       </div>
 
