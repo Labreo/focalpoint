@@ -18,6 +18,9 @@ interface NavbarProps {
   simulatorActive: boolean;
   onToggleSimulator: () => void;
   onOpenHelp: () => void;
+  isCalibrated?: boolean;
+  inputMode?: 'EYE_TRACKER' | 'MOUSE_DEBUG';
+  onToggleInputMode?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -25,7 +28,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleWebGazer,
   simulatorActive,
   onToggleSimulator,
-  onOpenHelp
+  onOpenHelp,
+  isCalibrated = false,
+  inputMode = 'EYE_TRACKER',
+  onToggleInputMode
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl px-4 py-3 select-none">
@@ -73,8 +79,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right: Controls & Actions */}
-        <div className="flex items-center gap-2.5">
-          {/* Webcam Eye Tracking Button */}
+        <div className="flex items-center gap-2">
+          {/* Eye Tracking Toggle Button */}
           <button
             onClick={onToggleWebGazer}
             className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition shadow-sm ${
@@ -87,30 +93,51 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isWebGazerActive ? (
               <>
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Webcam Gaze: Active</span>
+                <span>👁️ Iris Tracking: ON</span>
               </>
             ) : (
               <>
                 <Camera className="h-3.5 w-3.5" />
-                <span>Enable Webcam Gaze</span>
+                <span>Start Webcam Gaze</span>
               </>
             )}
           </button>
 
-          {/* Fallback indicator */}
-          {!isWebGazerActive && (
-            <span className="hidden items-center gap-1 rounded bg-slate-900 border border-slate-800 px-2 py-1 text-[11px] text-slate-400 md:flex">
-              <MousePointer className="h-3 w-3 text-slate-500" />
-              <span>Mouse Gaze Active</span>
-            </span>
+          {/* Mode Switch: Eye Tracker vs Mouse Debug */}
+          {onToggleInputMode && (
+            <button
+              onClick={onToggleInputMode}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-mono font-bold transition ${
+                inputMode === 'EYE_TRACKER'
+                  ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
+                  : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+              }`}
+              title={inputMode === 'EYE_TRACKER' ? 'Using real webcam eye tracking' : 'Using mouse debug surrogate'}
+            >
+              {inputMode === 'EYE_TRACKER' ? (
+                <>
+                  <span>👁️ Iris Mode</span>
+                </>
+              ) : (
+                <>
+                  <MousePointer className="h-3 w-3 text-amber-400" />
+                  <span>Mouse Mode</span>
+                </>
+              )}
+            </button>
           )}
 
-          {/* Calibration */}
+          {/* 9-Point Calibration Link */}
           <Link
             href="/calibration"
-            className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition"
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
+              isCalibrated
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                : 'border-amber-400/60 bg-amber-400/10 text-amber-300 animate-pulse hover:bg-amber-400/20'
+            }`}
+            title={isCalibrated ? 'Iris calibrated with 9 points' : 'Uncalibrated - click to run 9-point calibration'}
           >
-            <span>🎯 9-Point Calibrate</span>
+            <span>🎯 {isCalibrated ? 'Calibrated (9-Pt)' : 'Calibrate 9-Pts'}</span>
           </Link>
 
           {/* Profile */}

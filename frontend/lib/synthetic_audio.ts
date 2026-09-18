@@ -108,6 +108,32 @@ class AudioHapticManager {
       });
     } catch {}
   }
+
+  /**
+   * Play a clean synthesized tone at a specific frequency
+   */
+  public playTone(freq: number, durationSeconds: number = 0.08): void {
+    if (this.isMuted) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.07, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationSeconds);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + durationSeconds);
+    } catch {}
+  }
 }
 
 export const audioHaptics = new AudioHapticManager();
+

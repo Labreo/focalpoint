@@ -9,6 +9,7 @@ interface GazeReticleProps {
   kinematicState: KinematicState;
   dwellProgress: number; // 0.0 to 1.0
   isVisible?: boolean;
+  isFixed?: boolean;
 }
 
 export const GazeReticle: React.FC<GazeReticleProps> = ({
@@ -16,7 +17,8 @@ export const GazeReticle: React.FC<GazeReticleProps> = ({
   y,
   kinematicState,
   dwellProgress,
-  isVisible = true
+  isVisible = true,
+  isFixed = false
 }) => {
   if (!isVisible || x <= 0 || y <= 0) return null;
 
@@ -29,7 +31,7 @@ export const GazeReticle: React.FC<GazeReticleProps> = ({
 
   return (
     <div
-      className="pointer-events-none fixed z-50 transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75"
+      className={`pointer-events-none ${isFixed ? 'fixed' : 'absolute'} z-50 transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75`}
       style={{ left: `${x}px`, top: `${y}px` }}
       aria-hidden="true"
     >

@@ -68,6 +68,8 @@ export default function AdaptiveViewerPage() {
   const [kinematicState, setKinematicState] = useState<KinematicState>('SACCADE');
   const [dwellProgress, setDwellProgress] = useState<number>(0);
   const [activeFocusedRegion, setActiveFocusedRegion] = useState<SemanticRegion | null>(null);
+  const [inputMode, setInputMode] = useState<'EYE_TRACKER' | 'MOUSE_DEBUG'>('EYE_TRACKER');
+  const [isCalibrated, setIsCalibrated] = useState<boolean>(false);
 
   // Pinned Peripheral HUD regions
   const [pinnedHUDRegions, setPinnedHUDRegions] = useState<SemanticRegion[]>([]);
@@ -86,8 +88,14 @@ export default function AdaptiveViewerPage() {
     new KinematicIntentClassifier(DEFAULT_PATHOLOGY.dwellThresholdMs, DEFAULT_PATHOLOGY.maxDispersionPx)
   );
   const activeVideoRef = useRef<HTMLVideoElement | HTMLCanvasElement | null>(null);
+  const viewportRectRef = useRef<DOMRect | null>(null);
   const frameCountRef = useRef<number>(0);
   const lastFpsTimeRef = useRef<number>(performance.now());
+
+  // Check calibration status on mount
+  useEffect(() => {
+    setIsCalibrated(webGazerManager.isCalibrated());
+  }, []);
 
   // Handle Stream Mode Switch
   const handleSelectStreamMode = async (mode: StreamMode, customFile?: File) => {
@@ -145,23 +153,20 @@ export default function AdaptiveViewerPage() {
     }
   };
 
-  // Process Gaze Coordinate
-  const handleProcessGaze = useCallback((x: number, y: number) => {
+  // Process Gaze Coordinate in Video-Relative Space
+  const handleProcessViewportGaze = useCallback((videoX: number, videoY: number, containerW: number, containerH: number) => {
     const t0 = performance.now();
 
     // 1. Smooth via 2D Discrete Kalman Filter
-    const smoothed = kalmanFilterRef.current.update(x, y, t0);
+    const smoothed = kalmanFilterRef.current.update(videoX, videoY, t0);
     setSmoothedGaze({ x: smoothed.x, y: smoothed.y });
 
-    // 2. Classify via I-VDT State Machine
-    const w = typeof window !== 'undefined' ? window.innerWidth : 1920;
-    const h = typeof window !== 'undefined' ? window.innerHeight : 1080;
-
+    // 2. Classify via I-VDT State Machine using container dimensions
     const classification = intentClassifierRef.current.processPoint(
       smoothed,
       semanticRegions,
-      w,
-      h,
+      containerW,
+      containerH,
       t0
     );
 
@@ -177,10 +182,31 @@ export default function AdaptiveViewerPage() {
     setGazeLatencyMs(Math.max(8, Math.round(performance.now() - t0)));
   }, [semanticRegions]);
 
-  // Mouse Simulation Pointer
-  const handleMouseMoveSimulate = (x: number, y: number) => {
-    setRawGaze({ x, y });
-    handleProcessGaze(x, y);
+  // Screen-to-Viewport coordinate mapper for genuine webcam eye tracking
+  const handleProcessScreenGaze = useCallback((screenX: number, screenY: number) => {
+    const rect = viewportRectRef.current;
+    if (!rect || rect.width === 0 || rect.height === 0) {
+      const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const h = typeof window !== 'undefined' ? window.innerHeight : 720;
+      handleProcessViewportGaze(screenX, screenY, w, h);
+      return;
+    }
+
+    // Map screen coordinate to video-relative pixel coordinates
+    const videoX = Math.max(0, Math.min(rect.width, screenX - rect.left));
+    const videoY = Math.max(0, Math.min(rect.height, screenY - rect.top));
+
+    handleProcessViewportGaze(videoX, videoY, rect.width, rect.height);
+  }, [handleProcessViewportGaze]);
+
+  // Mouse Simulation Pointer (active only in MOUSE_DEBUG mode)
+  const handleMouseMoveSimulate = (videoX: number, videoY: number) => {
+    if (inputMode !== 'MOUSE_DEBUG') return;
+    const rect = viewportRectRef.current;
+    const w = rect ? rect.width : (typeof window !== 'undefined' ? window.innerWidth : 1280);
+    const h = rect ? rect.height : (typeof window !== 'undefined' ? window.innerHeight : 720);
+    setRawGaze({ x: videoX, y: videoY });
+    handleProcessViewportGaze(videoX, videoY, w, h);
   };
 
   // Toggle WebGazer Live Eye Tracking
@@ -192,17 +218,31 @@ export default function AdaptiveViewerPage() {
       try {
         const initialized = await webGazerManager.init();
         if (initialized) {
-          await webGazerManager.start((x, y) => {
-            setRawGaze({ x, y });
-            handleProcessGaze(x, y);
+          await webGazerManager.start((screenX, screenY) => {
+            if (inputMode === 'EYE_TRACKER') {
+              setRawGaze({ x: screenX, y: screenY });
+              handleProcessScreenGaze(screenX, screenY);
+            }
           });
           setIsWebGazerActive(true);
+          webGazerManager.showCameraPreview(true);
         }
       } catch (err) {
         console.warn('Failed to start WebGazer eye tracking:', err);
         setIsWebGazerActive(false);
       }
     }
+  };
+
+  // Switch between Eye Tracker and Mouse Debug Modes
+  const handleToggleInputMode = () => {
+    setInputMode(prev => {
+      const next = prev === 'EYE_TRACKER' ? 'MOUSE_DEBUG' : 'EYE_TRACKER';
+      if (next === 'EYE_TRACKER' && !isWebGazerActive) {
+        handleToggleWebGazer();
+      }
+      return next;
+    });
   };
 
   // Cleanup WebGazer on unmount
@@ -298,6 +338,9 @@ export default function AdaptiveViewerPage() {
         simulatorActive={simulatorActive}
         onToggleSimulator={() => setSimulatorActive(prev => !prev)}
         onOpenHelp={() => setIsHelpModalOpen(true)}
+        isCalibrated={isCalibrated}
+        inputMode={inputMode}
+        onToggleInputMode={handleToggleInputMode}
       />
 
       {/* Main Studio Container */}
@@ -318,6 +361,13 @@ export default function AdaptiveViewerPage() {
             </span>
             <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
               <span>Gaze: {gazeLatencyMs}ms</span>
+            </span>
+            <span className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs ${
+              isCalibrated 
+                ? 'border-emerald-500/30 bg-emerald-950/40 text-emerald-400' 
+                : 'border-amber-500/30 bg-amber-950/40 text-amber-400'
+            }`}>
+              {isCalibrated ? '🎯 9-Pt Calibrated' : '⚠️ Uncalibrated'}
             </span>
           </div>
         </div>
@@ -344,6 +394,8 @@ export default function AdaptiveViewerPage() {
                 onPinHUD={handlePinHUD}
                 isFrozen={isFrozen}
                 simulatorActive={simulatorActive}
+                inputMode={inputMode}
+                onContainerRectChange={(rect) => { viewportRectRef.current = rect; }}
                 onMouseMoveSimulate={handleMouseMoveSimulate}
                 onSourceRef={(source) => { activeVideoRef.current = source; }}
               />
@@ -352,6 +404,13 @@ export default function AdaptiveViewerPage() {
             {/* Video Footer Status Bar */}
             <div className="flex flex-wrap items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2 text-xs text-slate-400">
               <div className="flex items-center gap-3">
+                <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[11px] font-bold ${
+                  inputMode === 'EYE_TRACKER'
+                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                    : 'bg-cyan-400/20 text-cyan-300 border border-cyan-400/30'
+                }`}>
+                  {inputMode === 'EYE_TRACKER' ? '👁️ Webcam Iris Mode' : '🖱️ Mouse Debug Mode'}
+                </span>
                 <span className="font-mono text-slate-300">
                   Target: {activeFocusedRegion ? activeFocusedRegion.textContent?.slice(0, 45) + '...' : 'None (Searching gaze)'}
                 </span>
@@ -359,6 +418,9 @@ export default function AdaptiveViewerPage() {
               <div className="flex items-center gap-3 font-mono text-[11px]">
                 <span>I-VDT: {kinematicState}</span>
                 <span>Dwell: {Math.round(dwellProgress * 100)}%</span>
+                <span className={isCalibrated ? 'text-emerald-400' : 'text-amber-400'}>
+                  {isCalibrated ? '● Calibrated' : '○ Uncalibrated'}
+                </span>
                 <span className="text-amber-400">AWS Sync: Active</span>
               </div>
             </div>

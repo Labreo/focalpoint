@@ -25,8 +25,10 @@ interface AdaptiveViewportProps {
   onPinHUD: (region: SemanticRegion) => void;
   isFrozen: boolean;
   simulatorActive?: boolean;
+  inputMode?: 'EYE_TRACKER' | 'MOUSE_DEBUG';
   onMouseMoveSimulate?: (x: number, y: number) => void;
   onSourceRef?: (source: HTMLVideoElement | HTMLCanvasElement | null) => void;
+  onContainerRectChange?: (rect: DOMRect) => void;
 }
 
 export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
@@ -43,13 +45,31 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   onPinHUD,
   isFrozen,
   simulatorActive = false,
+  inputMode = 'EYE_TRACKER',
   onMouseMoveSimulate,
-  onSourceRef
+  onSourceRef,
+  onContainerRectChange
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(true);
+
+  // Notify parent of container rect for exact gaze coordinate transformation
+  useEffect(() => {
+    const reportRect = () => {
+      if (containerRef.current && onContainerRectChange) {
+        onContainerRectChange(containerRef.current.getBoundingClientRect());
+      }
+    };
+    reportRect();
+    window.addEventListener('resize', reportRect);
+    window.addEventListener('scroll', reportRect);
+    return () => {
+      window.removeEventListener('resize', reportRect);
+      window.removeEventListener('scroll', reportRect);
+    };
+  }, [onContainerRectChange]);
 
   // Notify parent of active video source for frame capture
   useEffect(() => {
@@ -129,7 +149,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   );
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (onMouseMoveSimulate && containerRef.current) {
+    if (inputMode === 'MOUSE_DEBUG' && onMouseMoveSimulate && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
