@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PathologyConfig, ContrastPreset, PathologyType } from '../../types';
 import { CONTRAST_THEMES } from '../../lib/pathology_transforms';
+import { focalPointClient } from '../../lib/aws_client';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<PathologyConfig>({
@@ -31,6 +32,21 @@ export default function ProfilePage() {
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Load User Profile from DynamoDB on mount
+  useEffect(() => {
+    async function loadSavedProfile() {
+      try {
+        const saved = await focalPointClient.getProfile('usr_kanak_001');
+        if (saved && saved.type) {
+          setProfile(prev => ({ ...prev, ...saved }));
+        }
+      } catch (err) {
+        console.warn('Failed to load profile from DynamoDB:', err);
+      }
+    }
+    loadSavedProfile();
+  }, []);
 
   // Live Canvas Preview of Scotoma & PRL Offset
   useEffect(() => {
@@ -135,7 +151,12 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    try {
+      await focalPointClient.saveProfile('usr_kanak_001', profile);
+    } catch (err) {
+      console.warn('Failed to persist profile to DynamoDB:', err);
+    }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };

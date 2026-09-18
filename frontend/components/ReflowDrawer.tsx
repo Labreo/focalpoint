@@ -63,7 +63,9 @@ export const ReflowDrawer: React.FC<ReflowDrawerProps> = ({
 
     try {
       // 1. Attempt AWS Polly Neural Speech Synthesis
-      const res = await fetch('/api/speech', {
+      const awsUrl = (process.env.NEXT_PUBLIC_AWS_API_URL || '').replace(/\/+$/, '');
+      const speechEndpoint = awsUrl ? `${awsUrl}/api/v1/synthesize-speech` : '/api/speech';
+      const res = await fetch(speechEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textToRead, voiceId: 'Ruth' })

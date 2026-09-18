@@ -9,9 +9,12 @@ import { FrameAnalysisPayload, PathologyConfig } from '../types';
 
 export class FocalPointCloudClient {
   private apiBaseUrl: string;
+  private isAwsDirect: boolean;
 
   constructor(apiBaseUrl?: string) {
-    this.apiBaseUrl = apiBaseUrl || process.env.NEXT_PUBLIC_API_URL || '/api';
+    const raw = apiBaseUrl || process.env.NEXT_PUBLIC_AWS_API_URL || process.env.NEXT_PUBLIC_API_URL || '/api';
+    this.apiBaseUrl = raw.replace(/\/+$/, '');
+    this.isAwsDirect = this.apiBaseUrl.startsWith('http://') || this.apiBaseUrl.startsWith('https://');
   }
 
   /**
@@ -26,8 +29,12 @@ export class FocalPointCloudClient {
   ): Promise<FrameAnalysisPayload> {
     const startTime = performance.now();
 
+    const endpoint = this.isAwsDirect
+      ? `${this.apiBaseUrl}/api/v1/analyze-frame`
+      : `${this.apiBaseUrl}/analyze`;
+
     try {
-      const response = await fetch(`${this.apiBaseUrl}/analyze`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -72,7 +79,10 @@ export class FocalPointCloudClient {
    */
   public async getProfile(userId: string): Promise<PathologyConfig | null> {
     try {
-      const res = await fetch(`${this.apiBaseUrl}/profile?userId=${encodeURIComponent(userId)}`);
+      const endpoint = this.isAwsDirect
+        ? `${this.apiBaseUrl}/api/v1/profiles/${encodeURIComponent(userId)}`
+        : `${this.apiBaseUrl}/profile?userId=${encodeURIComponent(userId)}`;
+      const res = await fetch(endpoint);
       if (res.ok) {
         return await res.json();
       }
@@ -85,7 +95,10 @@ export class FocalPointCloudClient {
    */
   public async saveProfile(userId: string, profile: Partial<PathologyConfig>): Promise<boolean> {
     try {
-      const res = await fetch(`${this.apiBaseUrl}/profile`, {
+      const endpoint = this.isAwsDirect
+        ? `${this.apiBaseUrl}/api/v1/profiles`
+        : `${this.apiBaseUrl}/profile`;
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, ...profile })
