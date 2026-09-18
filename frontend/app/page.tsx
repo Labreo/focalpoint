@@ -20,6 +20,7 @@ import { StreamSourceSelector, StreamMode } from '../components/StreamSourceSele
 import { AdaptiveViewport } from '../components/AdaptiveViewport';
 import { AccessibleReaderPanel } from '../components/AccessibleReaderPanel';
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal';
+import { SystemSpecsModal } from '../components/SystemSpecsModal';
 import { 
   Eye, 
   Sparkles, 
@@ -30,9 +31,6 @@ import {
   Database, 
   Radio, 
   Cloud, 
-  CheckCircle2, 
-  ArrowRight, 
-  SlidersHorizontal,
   Zap
 } from 'lucide-react';
 
@@ -81,6 +79,7 @@ export default function AdaptiveViewerPage() {
   const [gazeLatencyMs, setGazeLatencyMs] = useState<number>(16);
   const [awsLatencyMs, setAwsLatencyMs] = useState<number>(240);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
+  const [isSpecsModalOpen, setIsSpecsModalOpen] = useState<boolean>(false);
   const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
@@ -390,7 +389,7 @@ export default function AdaptiveViewerPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-400 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-amber-400 selection:text-black">
       {/* Top Navigation */}
       <Navbar
         isWebGazerActive={isWebGazerActive}
@@ -404,8 +403,8 @@ export default function AdaptiveViewerPage() {
       />
 
       {/* Main Studio Container */}
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        {/* Stream Source Selector Sub-Bar */}
+      <main className="mx-auto max-w-7xl px-4 py-5">
+        {/* Stream Source & Precision Telemetry Bar */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <StreamSourceSelector
             currentMode={streamMode}
@@ -413,38 +412,37 @@ export default function AdaptiveViewerPage() {
             isStreaming={!!mediaStream}
           />
 
-          {/* Quick status pill */}
+          {/* Precision Telemetry & Architecture Trigger */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span>60 FPS WebGL GPU</span>
-            </span>
-            <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1 text-slate-300 font-mono">
-              <span>Gaze: {gazeLatencyMs}ms</span>
-            </span>
-            <span className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs transition ${
-              isSceneChanging
-                ? 'border-amber-400 bg-amber-400/20 text-amber-300 animate-pulse'
-                : 'border-slate-800 bg-slate-900 text-slate-400'
-            }`}>
-              <Zap className="h-3 w-3 text-amber-400" />
-              <span>Edge Δ: {(lastDelta * 100).toFixed(1)}%</span>
-            </span>
-            <span className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs ${
-              isCalibrated 
-                ? 'border-emerald-500/30 bg-emerald-950/40 text-emerald-400' 
-                : 'border-amber-500/30 bg-amber-950/40 text-amber-400'
-            }`}>
-              {isCalibrated ? '🎯 9-Pt Calibrated' : '⚠️ Uncalibrated'}
-            </span>
+            <div className="flex items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-900/60 px-2.5 py-1 text-zinc-300 font-mono text-[11px] backdrop-blur-md">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>60 FPS GPU</span>
+              </span>
+              <span className="text-zinc-600">•</span>
+              <span>{gazeLatencyMs}ms Gaze</span>
+              <span className="text-zinc-600">•</span>
+              <span className={isSceneChanging ? 'text-amber-400 font-bold' : 'text-zinc-400'}>
+                Δ {(lastDelta * 100).toFixed(1)}%
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsSpecsModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100 transition shadow-sm"
+              title="Inspect AWS Cloud Architecture & Clinical Pathology Specs"
+            >
+              <Cpu className="h-3.5 w-3.5 text-amber-400" />
+              <span>Specs & Cloud</span>
+            </button>
           </div>
         </div>
 
-        {/* 2-Column Grid: Video Player + Accessible Reader */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* 2-Column Grid: Video Stage + Accessible Reader */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           {/* Left Column: Video Stage (65% width) */}
-          <div className="flex flex-col space-y-3 lg:col-span-8">
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-black shadow-2xl">
+          <div className="flex flex-col space-y-2.5 lg:col-span-8">
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-zinc-800/80 bg-black shadow-2xl">
               <AdaptiveViewport
                 videoSrc={videoSrc}
                 mediaStream={mediaStream}
@@ -469,27 +467,27 @@ export default function AdaptiveViewerPage() {
               />
             </div>
 
-            {/* Video Footer Status Bar */}
-            <div className="flex flex-wrap items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2 text-xs text-slate-400">
+            {/* Precision Broadcast Telemetry Ribbon */}
+            <div className="flex flex-wrap items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-3.5 py-2 text-xs text-zinc-400 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[11px] font-bold ${
+                <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide ${
                   inputMode === 'EYE_TRACKER'
-                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
-                    : 'bg-cyan-400/20 text-cyan-300 border border-cyan-400/30'
+                    ? 'bg-amber-400/10 text-amber-300 border border-amber-400/30'
+                    : 'bg-sky-400/10 text-sky-300 border border-sky-400/30'
                 }`}>
-                  {inputMode === 'EYE_TRACKER' ? '👁️ Webcam Iris Mode' : '🖱️ Ergonomic Motor Mode'}
+                  {inputMode === 'EYE_TRACKER' ? '👁️ Iris Gaze Active' : '🖱️ Motor Assist Active'}
                 </span>
-                <span className="font-mono text-slate-300">
-                  Target: {activeFocusedRegion ? activeFocusedRegion.textContent?.slice(0, 45) + '...' : 'None (Searching gaze)'}
+                <span className="font-mono text-zinc-300 text-[11px] truncate max-w-xs sm:max-w-md">
+                  Target: {activeFocusedRegion ? activeFocusedRegion.textContent : 'No target in foveal gaze'}
                 </span>
               </div>
-              <div className="flex items-center gap-3 font-mono text-[11px]">
-                <span>I-VDT: {kinematicState}</span>
-                <span>Dwell: {Math.round(dwellProgress * 100)}%</span>
+              <div className="flex items-center gap-3 font-mono text-[10px] text-zinc-500">
+                <span>State: <span className="text-zinc-300">{kinematicState}</span></span>
+                <span>Dwell: <span className="text-zinc-300">{Math.round(dwellProgress * 100)}%</span></span>
                 <span className={isCalibrated ? 'text-emerald-400' : 'text-amber-400'}>
-                  {isCalibrated ? '● Calibrated' : '○ Uncalibrated'}
+                  {isCalibrated ? '● Calibrated' : '○ 9-Pt Pending'}
                 </span>
-                <span className="text-amber-400">AWS: {lastSyncReason}</span>
+                <span className="text-zinc-400">AWS: {lastSyncReason}</span>
               </div>
             </div>
           </div>
@@ -515,165 +513,36 @@ export default function AdaptiveViewerPage() {
           </div>
         </div>
 
-        {/* Section 1: How FocalPoint Works for Low-Vision Patients */}
-        <section className="mt-14 border-t border-slate-800/80 pt-10">
-          <div className="mb-8 text-center">
-            <span className="rounded-full bg-amber-400/10 px-3 py-1 font-mono text-xs font-bold text-amber-400 border border-amber-400/20">
-              ENGINEERING FOR ACCESSIBILITY
-            </span>
-            <h2 className="mt-3 text-2xl font-black text-white tracking-tight sm:text-3xl">
-              How FocalPoint Solves Central Vision Loss
-            </h2>
-            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-400 leading-relaxed">
-              350+ million people live with Macular Degeneration or Retinitis Pigmentosa. FocalPoint replaces passive screen magnifiers with active gaze-driven semantic reconstruction.
+        {/* Minimalist Studio Footer */}
+        <footer className="mt-12 flex flex-wrap items-center justify-between border-t border-zinc-800/80 pt-6 pb-10 text-xs text-zinc-500">
+          <div>
+            <span className="font-semibold text-zinc-400">FocalPoint Studio</span> • Assistive Video Kinematics
+            <p className="mt-0.5 font-mono text-[11px] text-zinc-600">
+              AWS Track 2: Ship It • Amazon Bedrock • Rekognition • Polly • Lambda • Amplify
             </p>
           </div>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {/* Card 1 */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-md">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-400/15 text-amber-400 mb-4 border border-amber-400/20">
-                <Eye className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold text-white">1. Webcam Gaze Kinematics</h3>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                WebGazer.js eye tracking streams gaze at 60 FPS. A 4-state 2D Discrete Kalman Filter eliminates tremors, while I-VDT state machine distinguishes rapid saccades from deliberate 280ms fixations.
-              </p>
-            </div>
-
-            {/* Card 2 */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-md">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-400/15 text-cyan-400 mb-4 border border-cyan-400/20">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold text-white">2. AWS Multi-Modal Scene AI</h3>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                Differential perceptual hashing triggers AWS Lambda fan-out. Amazon Rekognition extracts bounding boxes and text lines, while Bedrock Claude 3.5 Sonnet parses scoreboards, slides, and tickers.
-              </p>
-            </div>
-
-            {/* Card 3 */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-md">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-400 mb-4 border border-emerald-400/20">
-                <Volume2 className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-bold text-white">3. Atkinson Reflow & Polly Audio</h3>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                Content is reflowed in Atkinson Hyperlegible glyphs (Braille Institute designed for low vision) with adjustable 19.4:1 contrast palettes and read aloud using Amazon Polly Neural text-to-speech.
-              </p>
-            </div>
+          <div className="flex items-center gap-3 mt-3 sm:mt-0 font-mono text-[11px]">
+            <button
+              onClick={() => setIsSpecsModalOpen(true)}
+              className="hover:text-zinc-300 transition underline underline-offset-2"
+            >
+              System Specs
+            </button>
+            <span>•</span>
+            <button
+              onClick={() => setIsHelpModalOpen(true)}
+              className="hover:text-zinc-300 transition underline underline-offset-2"
+            >
+              Shortcuts (?)
+            </button>
+            <span>•</span>
+            <a
+              href="/calibration"
+              className="hover:text-zinc-300 transition underline underline-offset-2"
+            >
+              Calibration
+            </a>
           </div>
-        </section>
-
-        {/* Section 2: Clinical Pathology Simulation Comparison */}
-        <section className="mt-14 border-t border-slate-800/80 pt-10">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-white">Clinical Pathology Simulator</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Toggle clinical simulator mode in the top navbar to see how patient vision impairments are simulated and reconstructed in real time.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {(['AMD', 'TUNNEL_VISION', 'LOW_ACUITY'] as PathologyConfig['type'][]).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setPathologyConfig(p => ({ ...p, type }))}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
-                    pathologyConfig.type === type
-                      ? 'border-amber-400 bg-amber-400/20 text-amber-300'
-                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {type === 'AMD' ? 'Macular Degeneration (Central Scotoma)' :
-                   type === 'TUNNEL_VISION' ? 'Retinitis Pigmentosa (Tunnel Vision)' : 'Low Acuity / Cataracts'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-              <span className="font-mono text-xs font-bold text-amber-400">AMD (Scotoma)</span>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Central blind spot obliterates foveal vision. FocalPoint projects text to the Preferred Retinal Locus (PRL) in the parafovea.
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-              <span className="font-mono text-xs font-bold text-cyan-400">Tunnel Vision (RP)</span>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Peripheral field is lost, leaving a narrow 10° cone. FocalPoint applies anamorphic radial compression to fit widescreen content.
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-              <span className="font-mono text-xs font-bold text-emerald-400">Low Acuity & Cataracts</span>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Severe contrast degradation and blur. FocalPoint applies 3x3 Laplacian edge sharpening and WCAG AAA color stretching.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 3: Live AWS Serverless Infrastructure */}
-        <section className="mt-14 border-t border-slate-800/80 pt-10">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
-                AWS TRACK 2 • SHIP IT
-              </span>
-              <h3 className="mt-2 text-xl font-bold text-white">Live AWS Cloud Architecture</h3>
-            </div>
-            <span className="font-mono text-xs text-slate-400">Region: us-east-1 (N. Virginia)</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                <Cloud className="h-4 w-4 text-amber-400" />
-                <span>AWS Amplify</span>
-              </div>
-              <div className="mt-2 font-mono text-[10px] text-emerald-400">ONLINE (HTTP/2 200)</div>
-              <div className="text-[10px] text-slate-500 truncate">main.d1s5otc6zch586.amplifyapp.com</div>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                <Radio className="h-4 w-4 text-cyan-400" />
-                <span>API Gateway v2</span>
-              </div>
-              <div className="mt-2 font-mono text-[10px] text-emerald-400">ONLINE (CORS ACTIVE)</div>
-              <div className="text-[10px] text-slate-500 truncate">xxeqb4odra.execute-api.us-east-1</div>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                <Cpu className="h-4 w-4 text-purple-400" />
-                <span>AWS Lambda</span>
-              </div>
-              <div className="mt-2 font-mono text-[10px] text-emerald-400">2048 MB Python 3.12</div>
-              <div className="text-[10px] text-slate-500 truncate">focalpoint-orchestrator</div>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                <Database className="h-4 w-4 text-blue-400" />
-                <span>DynamoDB + S3</span>
-              </div>
-              <div className="mt-2 font-mono text-[10px] text-emerald-400">ENCRYPTED AT REST</div>
-              <div className="text-[10px] text-slate-500 truncate">FocalPoint_UserProfiles</div>
-            </div>
-          </div>
-        </section>
-
-        {/* Footer */}
-        <footer className="mt-16 border-t border-slate-800/80 pt-8 pb-12 text-center text-xs text-slate-500">
-          <p className="font-sans">
-            FocalPoint • Gaze-Driven Content-Aware Assistive Video Suite
-          </p>
-          <p className="mt-1 font-mono text-[11px] text-slate-600">
-            Built for First Commit Hackathon 2026 • Track 2: Ship It (AWS Bedrock, Rekognition, Polly, Lambda, DynamoDB, Amplify)
-          </p>
         </footer>
       </main>
 
@@ -681,6 +550,14 @@ export default function AdaptiveViewerPage() {
       <KeyboardShortcutsModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
+      />
+
+      {/* System Specifications & Architecture Modal */}
+      <SystemSpecsModal
+        isOpen={isSpecsModalOpen}
+        onClose={() => setIsSpecsModalOpen(false)}
+        activePathology={pathologyConfig}
+        onSelectPathology={(type) => setPathologyConfig(p => ({ ...p, type }))}
       />
     </div>
   );

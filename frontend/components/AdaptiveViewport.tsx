@@ -268,20 +268,20 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           const box = region.boundingBox;
           const isFocused = activeFocusedRegion?.id === region.id;
 
-          let borderColor = 'border-amber-400/80';
-          let bgColor = 'bg-amber-400/10';
-          let tagBadgeColor = 'bg-amber-400 text-black';
+          let borderColor = 'border-amber-400/40 hover:border-amber-400/80';
+          let bgColor = isFocused ? 'bg-amber-400/10' : 'bg-transparent hover:bg-amber-400/5';
+          let tagBadgeColor = 'bg-amber-400 text-zinc-950';
           let IconComponent = Type;
 
           if (region.type === 'FACIAL_PORTRAIT') {
-            borderColor = 'border-cyan-400/80';
-            bgColor = 'bg-cyan-500/15';
-            tagBadgeColor = 'bg-cyan-400 text-black';
+            borderColor = 'border-sky-400/40 hover:border-sky-400/80';
+            bgColor = isFocused ? 'bg-sky-400/10' : 'bg-transparent hover:bg-sky-400/5';
+            tagBadgeColor = 'bg-sky-400 text-zinc-950';
             IconComponent = User;
           } else if (region.type === 'PERSISTENT_HUD') {
-            borderColor = 'border-emerald-400/90';
-            bgColor = 'bg-emerald-500/15';
-            tagBadgeColor = 'bg-emerald-400 text-black';
+            borderColor = 'border-emerald-400/50 hover:border-emerald-400/90';
+            bgColor = isFocused ? 'bg-emerald-400/10' : 'bg-transparent hover:bg-emerald-400/5';
+            tagBadgeColor = 'bg-emerald-400 text-zinc-950';
             IconComponent = BarChart2;
           }
 
@@ -289,10 +289,10 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
             <div
               key={region.id}
               onClick={() => onRegionDwellComplete(region)}
-              className={`pointer-events-auto absolute cursor-pointer rounded-lg border-2 transition-all duration-150 ${borderColor} ${bgColor} ${
+              className={`group pointer-events-auto absolute cursor-pointer rounded-lg border transition-all duration-150 ${borderColor} ${bgColor} ${
                 isFocused
-                  ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-black shadow-2xl scale-[1.01]'
-                  : 'hover:border-white hover:bg-white/15'
+                  ? 'border-amber-400 ring-2 ring-amber-400/60 ring-offset-2 ring-offset-black shadow-xl'
+                  : ''
               }`}
               style={{
                 left: `${box.left * 100}%`,
@@ -304,11 +304,13 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
               tabIndex={0}
               aria-label={`Select ${region.type.replace('_', ' ')}: ${region.textContent}`}
             >
-              {/* Semantic Tag Header */}
-              <div className="absolute -top-5 left-1 flex items-center gap-1 text-[10px] font-bold shadow-md">
-                <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${tagBadgeColor}`}>
-                  <IconComponent className="h-3 w-3" />
-                  <span>{region.type === 'PERSISTENT_HUD' ? 'LIVE SCOREBOARD' : region.type.replace('_', ' ')}</span>
+              {/* Semantic Tag Header (Visible on focus or hover) */}
+              <div className={`absolute -top-5 left-1 flex items-center gap-1 text-[10px] font-bold shadow-md transition-opacity duration-150 ${
+                isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}>
+                <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-mono ${tagBadgeColor}`}>
+                  <IconComponent className="h-2.5 w-2.5" />
+                  <span>{region.type === 'PERSISTENT_HUD' ? 'SCOREBOARD' : region.type.replace('_', ' ')}</span>
                 </span>
 
                 {/* HUD Pin Action Shortcut */}
@@ -318,10 +320,10 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
                       e.stopPropagation();
                       onPinHUD(region);
                     }}
-                    className="flex items-center gap-1 rounded bg-black/80 px-1.5 py-0.5 text-emerald-300 hover:bg-emerald-400 hover:text-black transition"
+                    className="flex items-center gap-1 rounded bg-zinc-950/90 px-1.5 py-0.5 text-[9px] font-mono text-emerald-400 hover:bg-emerald-400 hover:text-black transition border border-emerald-500/30"
                     title="Pin this scoreboard to periphery"
                   >
-                    <Pin className="h-2.5 w-2.5" />
+                    <Pin className="h-2 w-2" />
                     <span>PIN</span>
                   </button>
                 )}
@@ -330,7 +332,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
               {/* Dwell Progress Shimmer inside bounding box */}
               {isFocused && dwellProgress > 0 && (
                 <div
-                  className="absolute bottom-0 left-0 top-0 bg-amber-400/30 transition-all duration-75"
+                  className="absolute bottom-0 left-0 top-0 bg-amber-400/25 transition-all duration-75"
                   style={{ width: `${dwellProgress * 100}%` }}
                 />
               )}
@@ -340,33 +342,33 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
       </div>
 
       {/* Video Overlay Playback Controls */}
-      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-lg bg-black/80 px-2.5 py-1.5 text-xs text-white backdrop-blur-md border border-white/10">
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-1.5 rounded-lg bg-zinc-950/80 px-2 py-1 text-xs text-zinc-300 backdrop-blur-md border border-zinc-800/80 shadow-lg">
         <button
           onClick={() => setUseWebGL(prev => !prev)}
-          className={`flex items-center gap-1 rounded px-2 py-1 font-mono text-[11px] font-bold transition ${
+          className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold transition ${
             useWebGL && webGLActive 
-              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40' 
-              : 'bg-slate-800 text-slate-400 hover:text-white'
+              ? 'bg-zinc-800 text-zinc-100 border border-zinc-700/80' 
+              : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200'
           }`}
           title="Toggle WebGL GPU Fragment Shader Pipeline"
         >
-          <Cpu className="h-3 w-3" />
-          <span>{useWebGL && webGLActive ? 'GPU Shader: ON' : 'GPU Shader: OFF'}</span>
+          <Cpu className="h-3 w-3 text-amber-400" />
+          <span>{useWebGL && webGLActive ? 'GPU Shader ON' : 'GPU Shader OFF'}</span>
         </button>
 
         <button
           onClick={togglePlay}
-          className="rounded px-2 py-1 font-bold hover:bg-white/20 transition text-slate-200"
+          className="rounded px-2 py-0.5 text-[11px] font-medium hover:bg-zinc-800 transition text-zinc-300 hover:text-zinc-100"
           title={isPlaying ? "Pause video" : "Play video"}
         >
-          {isPlaying ? '⏸ Pause' : '▶ Play'}
+          {isPlaying ? 'Pause' : 'Play'}
         </button>
         <button
           onClick={toggleMute}
-          className="rounded px-2 py-1 font-bold hover:bg-white/20 transition text-slate-200"
+          className="rounded px-2 py-0.5 text-[11px] font-medium hover:bg-zinc-800 transition text-zinc-300 hover:text-zinc-100"
           title={isMuted ? "Unmute audio" : "Mute audio"}
         >
-          {isMuted ? '🔇 Unmute' : '🔊 Mute'}
+          {isMuted ? 'Unmute' : 'Mute'}
         </button>
       </div>
 

@@ -168,65 +168,66 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
   const theme = getThemeStyles();
 
   return (
-    <aside className="flex h-full flex-col justify-between rounded-xl border border-slate-800 bg-slate-900/90 p-5 shadow-2xl backdrop-blur-md">
+    <aside className="flex h-full flex-col justify-between rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 shadow-2xl backdrop-blur-xl">
       {/* Top Header */}
       <div>
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-400">
-              <span className="h-1.5 w-1.5 animate-ping rounded-full bg-amber-400" />
+            <span className="flex h-2 w-2 items-center justify-center rounded-full bg-amber-400">
+              <span className="h-1 w-1 animate-ping rounded-full bg-amber-400" />
             </span>
-            <h2 className="font-sans text-sm font-bold uppercase tracking-wider text-slate-200">
+            <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-zinc-300">
               Accessible Gaze Reader
             </h2>
           </div>
 
-          <div className="flex items-center gap-1">
-            <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-400">
-              WCAG 2.2 AAA
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+              WCAG AAA
             </span>
           </div>
         </div>
 
-        {/* Font Size & Contrast Quick Controls */}
-        <div className="my-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-          {/* Font Scale */}
-          <div className="flex items-center gap-1">
+        {/* Font Size & Contrast Controls */}
+        <div className="my-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+          {/* Font Scale Pill */}
+          <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-950/80 p-0.5">
             <button
               onClick={() => onFontScaleChange(Math.max(0.9, fontScale - 0.2))}
-              className="rounded bg-slate-800 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-slate-700 transition"
+              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition"
               title="Decrease text size"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </button>
-            <span className="min-w-[48px] text-center font-mono text-xs text-slate-300">
+            <span className="min-w-[44px] text-center font-mono text-[11px] font-semibold text-zinc-300">
               {Math.round(fontScale * 100)}%
             </span>
             <button
               onClick={() => onFontScaleChange(Math.min(2.5, fontScale + 0.2))}
-              className="rounded bg-slate-800 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-slate-700 transition"
+              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition"
               title="Increase text size"
             >
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {/* Contrast Themes */}
-          <div className="flex items-center gap-1">
+          {/* Contrast Theme Rings */}
+          <div className="flex items-center gap-1.5">
             {(['AMBER', 'INVERT', 'CYAN', 'MINT'] as ContrastPreset[]).map((preset) => (
               <button
                 key={preset}
                 onClick={() => onContrastChange(preset)}
-                className={`h-5 w-5 rounded-full border transition ${
-                  contrastPreset === preset ? 'ring-2 ring-amber-400 scale-110' : 'opacity-60 hover:opacity-100'
+                className={`h-4 w-4 rounded-full border transition-all ${
+                  contrastPreset === preset ? 'ring-2 ring-amber-400/80 ring-offset-2 ring-offset-zinc-950 scale-110' : 'opacity-50 hover:opacity-100'
                 }`}
                 style={{
                   backgroundColor:
                     preset === 'AMBER' ? '#FDE047' :
                     preset === 'CYAN' ? '#38BDF8' :
-                    preset === 'MINT' ? '#34D399' : '#FFFFFF'
+                    preset === 'MINT' ? '#34D399' : '#FFFFFF',
+                  borderColor: 'rgba(255,255,255,0.2)'
                 }}
-                title={`Select ${preset} palette`}
+                title={`Select ${preset} color palette`}
               />
             ))}
           </div>
@@ -234,45 +235,45 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
 
         {/* Active Inspection Card */}
         {activeRegion ? (
-          <div className={`rounded-xl border-2 p-4 transition-all duration-200 ${theme.cardBg} shadow-xl`}>
+          <div className={`rounded-xl border p-4 transition-all duration-200 ${theme.cardBg} shadow-lg`}>
             <div className="mb-2 flex items-center justify-between">
-              <span className={`rounded px-2 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider ${theme.accent}`}>
+              <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${theme.accent}`}>
                 {activeRegion.type === 'PERSISTENT_HUD' ? 'LIVE SCOREBOARD' : activeRegion.type.replace('_', ' ')}
               </span>
 
               {activeRegion.confidence && (
-                <span className="font-mono text-[10px] text-slate-400">
-                  OCR: {(activeRegion.confidence * 100).toFixed(1)}%
+                <span className="font-mono text-[10px] text-zinc-500">
+                  OCR {(activeRegion.confidence * 100).toFixed(0)}%
                 </span>
               )}
             </div>
 
             {/* Atkinson Hyperlegible Reflowed Text */}
             <div
-              className={`font-atkinson font-bold leading-relaxed tracking-wide ${theme.text}`}
-              style={{ fontSize: `${fontScale * 1.3}rem` }}
+              className={`font-atkinson font-semibold leading-relaxed tracking-wide ${theme.text}`}
+              style={{ fontSize: `${fontScale * 1.25}rem` }}
             >
               {activeRegion.textContent}
             </div>
 
             {/* Read Aloud Button */}
-            <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-800/80 pt-3">
+            <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-zinc-800/80 pt-3">
               <button
                 onClick={() => handleSpeak()}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition shadow-md ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition shadow-sm ${
                   isSpeaking
-                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    ? 'bg-rose-500 text-white hover:bg-rose-600'
                     : `${theme.accent} hover:opacity-90`
                 }`}
               >
                 {isSpeaking ? (
                   <>
-                    <Square className="h-3.5 w-3.5 fill-current" />
+                    <Square className="h-3 w-3 fill-current" />
                     <span>Stop Audio</span>
                   </>
                 ) : (
                   <>
-                    <Volume2 className="h-4 w-4" />
+                    <Volume2 className="h-3.5 w-3.5" />
                     <span>Listen Aloud (AWS Polly)</span>
                   </>
                 )}
@@ -281,45 +282,45 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
               {/* Live Soundwave Animation */}
               {isSpeaking && (
                 <div className="flex items-center gap-1">
-                  <span className="h-4 w-1 animate-pulse bg-amber-400 rounded-full" />
-                  <span className="h-6 w-1 animate-pulse bg-amber-400 rounded-full [animation-delay:150ms]" />
-                  <span className="h-3 w-1 animate-pulse bg-amber-400 rounded-full [animation-delay:300ms]" />
-                  <span className="h-5 w-1 animate-pulse bg-amber-400 rounded-full [animation-delay:450ms]" />
+                  <span className="h-3 w-0.5 animate-pulse bg-amber-400 rounded-full" />
+                  <span className="h-5 w-0.5 animate-pulse bg-amber-400 rounded-full [animation-delay:150ms]" />
+                  <span className="h-2.5 w-0.5 animate-pulse bg-amber-400 rounded-full [animation-delay:300ms]" />
+                  <span className="h-4 w-0.5 animate-pulse bg-amber-400 rounded-full [animation-delay:450ms]" />
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-center text-slate-400">
-            <Eye className="mx-auto h-8 w-8 text-slate-500 mb-2 opacity-80" />
-            <p className="font-atkinson text-sm font-semibold text-slate-300">
-              Fixate gaze over any text in the video
+          <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 p-6 text-center text-zinc-400">
+            <Eye className="mx-auto h-7 w-7 text-zinc-600 mb-2" />
+            <p className="font-sans text-xs font-medium text-zinc-300">
+              Focus gaze over text or scoreboard
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Look at the scoreboard, slide bullets, or news ticker for 250ms (or hover with mouse) to inspect and hear it read aloud.
+            <p className="mt-1 text-[11px] text-zinc-500 leading-relaxed">
+              Dwell for 250ms (or hover with mouse) to reflow in Atkinson Hyperlegible type and synthesize AWS Polly audio.
             </p>
           </div>
         )}
 
         {/* Pinned Peripheral Scoreboard Widget */}
         {pinnedRegions.length > 0 && (
-          <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3">
+          <div className="mt-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-400">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold text-emerald-400">
                 <Pin className="h-3 w-3" />
-                <span>PINNED PERIPHERAL HUD</span>
+                <span>PINNED HUD WIDGET</span>
               </span>
-              <span className="text-[10px] text-slate-400">Docked to vision</span>
+              <span className="text-[10px] text-zinc-500">Docked</span>
             </div>
 
             {pinnedRegions.map((region) => (
-              <div key={region.id} className="flex items-center justify-between rounded bg-black/60 p-2 text-xs">
-                <span className="font-atkinson font-bold text-emerald-300">
+              <div key={region.id} className="flex items-center justify-between rounded-lg bg-zinc-950/80 p-2 text-xs border border-emerald-500/20">
+                <span className="font-atkinson font-semibold text-emerald-300">
                   {region.textContent}
                 </span>
                 <button
                   onClick={() => onUnpinHUD(region.id)}
-                  className="text-slate-400 hover:text-white text-[10px] ml-2"
+                  className="text-zinc-500 hover:text-zinc-200 text-xs ml-2 px-1"
                   title="Unpin"
                 >
                   ✕
@@ -331,27 +332,27 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
       </div>
 
       {/* Bottom Action: Deep AWS Vision Trigger */}
-      <div className="mt-4 border-t border-slate-800 pt-3">
+      <div className="mt-4 border-t border-zinc-800/80 pt-3">
         {/* Autonomous Edge Engine Telemetry */}
-        <div className="mb-2 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-xs">
+        <div className="mb-2 flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/60 px-2.5 py-1.5 text-xs">
           <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${autoSyncAWS ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-            <span className="font-mono text-[11px] text-slate-300">Edge Δ Engine</span>
+            <span className={`h-1.5 w-1.5 rounded-full ${autoSyncAWS ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+            <span className="font-mono text-[11px] text-zinc-300">Edge Δ Engine</span>
             <span className="font-mono text-[10px] text-amber-400">
-              Δ: {((lastDelta || 0) * 100).toFixed(1)}%
+              Δ {((lastDelta || 0) * 100).toFixed(1)}%
             </span>
           </div>
           {onToggleAutoSyncAWS && (
             <button
               onClick={onToggleAutoSyncAWS}
-              className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold transition ${
+              className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold transition ${
                 autoSyncAWS 
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                  : 'bg-slate-800 text-slate-400'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' 
+                  : 'bg-zinc-800 text-zinc-400'
               }`}
               title="Toggle Autonomous AWS Differential Ingestion"
             >
-              {autoSyncAWS ? 'AUTO: ON' : 'AUTO: OFF'}
+              {autoSyncAWS ? 'AUTO' : 'MANUAL'}
             </button>
           )}
         </div>
@@ -359,13 +360,13 @@ export const AccessibleReaderPanel: React.FC<AccessibleReaderPanelProps> = ({
         <button
           onClick={onTriggerAwsAnalysis}
           disabled={isAnalyzing}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-800 py-2.5 px-3 font-sans text-xs font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-700/60 bg-zinc-800/90 py-2 px-3 font-sans text-xs font-semibold text-zinc-200 hover:bg-zinc-700 hover:text-white transition disabled:opacity-50 shadow-sm"
         >
           <Sparkles className="h-3.5 w-3.5 text-amber-400" />
           <span>{isAnalyzing ? 'Analyzing Frame with AWS...' : 'Run Deep AWS Vision Analysis'}</span>
         </button>
 
-        <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-slate-500">
+        <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-zinc-500">
           <span className="truncate max-w-[170px]" title={lastSyncReason}>Sync: {lastSyncReason}</span>
           <span>AWS: {awsLatencyMs || 220}ms</span>
         </div>
