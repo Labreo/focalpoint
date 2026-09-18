@@ -34,7 +34,11 @@ describe('KinematicIntentClassifier (I-VDT)', () => {
     expect(res.dispersionPx).toBeLessThanOrEqual(65);
     expect(res.dwellProgress).toBeGreaterThan(0);
 
-    // Advance time past 280ms dwell
+    // Advance time past 280ms dwell with continuous 50ms samples
+    classifier.processPoint({ x: 500, y: 850 }, mockRegions, 1000, 1000, 1150);
+    classifier.processPoint({ x: 501, y: 849 }, mockRegions, 1000, 1000, 1200);
+    classifier.processPoint({ x: 500, y: 850 }, mockRegions, 1000, 1000, 1250);
+    classifier.processPoint({ x: 502, y: 851 }, mockRegions, 1000, 1000, 1300);
     res = classifier.processPoint({ x: 501, y: 850 }, mockRegions, 1000, 1000, 1350);
     expect(res.state).toBe('FIXATION');
     expect(res.dwellProgress).toBe(1.0);
