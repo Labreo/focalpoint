@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  FocalPoint AWS Serverless Backend
+  Gaze-driven semantic media adaptation pipeline for low vision
+  Parallel multi-model fanout across Rekognition and Bedrock Claude 3.5 Sonnet
+
+Globals:
+  Function:
+    Timeout: 15
+    MemorySize: 2048
+    Runtime: python3.12
+    Tracing: Active
+    Environment:
+      Variables:
+        USER_PROFILES_TABLE: !Ref UserProfilesTable
+        FRAME_BUCKET_NAME: !Ref EphemeralFrameBucket
+        BEDROCK_MODEL_ID: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        LOG_LEVEL: "INFO"
+
+Resources:
+  # REST API Gateway with CORS and Binary Media Support
+  FocalPointApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      BinaryMediaTypes:
+        - "image/jpeg"
+        - "image/png"
+        - "application/octet-stream"
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
+
+  # Ephemeral S3 Frame Store (Auto-deleted after 24 hours for privacy and cost control)
+  EphemeralFrameBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "focalpoint-frames-${AWS::AccountId}-${AWS::Region}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireFramesAfter24Hours
+            Status: Enabled
+            ExpirationInDays: 1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # DynamoDB User Profiles & Ophthalmic Calibration Store
+  UserProfilesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: FocalPoint_UserProfiles
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: profileId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: profileId
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # Vision Orchestrator Lambda Function
+  VisionOrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: handlers/
+      Handler: orchestrator.lambda_handler
+      Description: Asynchronous fan-out orchestrator invoking Rekognition & Bedrock for scene decomposition
+      Policies:
+        # Rekognition OCR & Face Detection
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "rekognition:DetectText"
+                - "rekognition:DetectFaces"
+              Resource: "*"
+        # Bedrock Claude 3.5 Sonnet Multimodal Scene Understanding
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "bedrock:InvokeModel"
+                - "bedrock:Converse"
+              Resource: "*"
+        # S3 Ephemeral Frame Bucket Access
+        - S3CrudPolicy:
+            BucketName: !Sub "focalpoint-frames-${AWS::AccountId}-${AWS::Region}"
+        # DynamoDB User Profiles Table Access
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfilesTable
+        # CloudWatch Custom Metrics
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "cloudwatch:PutMetricData"
+              Resource: "*"
+      Events:
+        AnalyzeFrame:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FocalPointApi
+            Path: /api/v1/analyze-frame
+            Method: post
+        GetProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FocalPointApi
+            Path: /api/v1/profiles/{userId}
+            Method: get
+        SaveProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FocalPointApi
+            Path: /api/v1/profiles
+            Method: post
+
+Outputs:
+  ApiEndpointUrl:
+    Description: "Base URL for FocalPoint REST API Gateway stage"
+    Value: !Sub "https://${FocalPointApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+  VisionOrchestratorFunctionArn:
+    Description: "Vision Orchestrator Lambda Function ARN"
+    Value: !GetAtt VisionOrchestratorFunction.Arn
+  EphemeralFrameBucketName:
+    Description: "S3 Ephemeral Frame Ingestion Bucket"
+    Value: !Ref EphemeralFrameBucket
+  UserProfilesTableName:
+    Description: "DynamoDB User Pathology Profiles Table"
+    Value: !Ref UserProfilesTable
