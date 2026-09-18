@@ -102,6 +102,12 @@ export default function AdaptiveViewerPage() {
     } else if (mode === 'SCREEN_CAPTURE') {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          track.onended = () => {
+            handleSelectStreamMode('DEMO_NEWS');
+          };
+        }
         setMediaStream(stream);
         setCurrentDemoScene(null);
         // Default sample regions for live screen
@@ -439,6 +445,12 @@ export default function AdaptiveViewerPage() {
         />
 
         <div className="flex items-center gap-2 text-xs text-slate-400">
+          {streamMode === 'SCREEN_CAPTURE' && (
+            <span className="flex items-center gap-1.5 rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-bold text-cyan-highlight">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+              <span>Live Feed: YouTube / Remote Broadcast</span>
+            </span>
+          )}
           {isFrozen && (
             <span className="flex items-center gap-1 rounded bg-amber-400/20 px-2 py-0.5 font-bold text-amber-highlight">
               [PAUSED / FROZEN]

@@ -67,7 +67,7 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
 
       <div className="h-4 w-px bg-white/20" />
 
-      {/* Live Screen Share */}
+      {/* Live Screen Share (YouTube / Video / TV) */}
       <button
         onClick={() => onSelectMode('SCREEN_CAPTURE')}
         className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-atkinson text-xs font-bold transition ${
@@ -75,10 +75,11 @@ export const StreamSourceSelector: React.FC<StreamSourceSelectorProps> = ({
             ? 'bg-cyan-highlight text-slate-950 shadow-md shadow-cyan-300/30'
             : 'text-slate-300 hover:bg-white/10 hover:text-white'
         }`}
+        title="Share any Chrome tab playing a real YouTube video or remote stream"
         aria-pressed={currentMode === 'SCREEN_CAPTURE'}
       >
         <Monitor className="h-3.5 w-3.5" />
-        <span>Screen Share</span>
+        <span>Screen Share (YouTube / Video)</span>
       </button>
 
       {/* Webcam */}
