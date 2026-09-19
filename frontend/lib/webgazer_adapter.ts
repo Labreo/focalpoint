@@ -71,14 +71,19 @@ class WebGazerManager {
     this.gazeCallback = onGaze;
     this.cameraPreviewVisible = showPreview;
     const loaded = await this.loadScript();
-    if (!loaded || !window.webgazer) return false;
+    if (!loaded || typeof window === 'undefined' || !window.webgazer) return false;
 
     try {
+      // 1. Explicitly configure local absolute path for MediaPipe FaceMesh solution
+      if (window.webgazer.params) {
+        window.webgazer.params.faceMeshSolutionPath = '/mediapipe/face_mesh';
+      }
+
       // Configure ridge regression model and persistence
       window.webgazer.setRegression('ridge');
       window.webgazer.saveDataAcrossSessions(true);
 
-      // Disable default WebGazer prediction red dot (we render our Kalman reticle)
+      // Disable default WebGazer prediction red dot (we render our custom Kalman reticle)
       window.webgazer.showPredictionPoints(false);
 
       // Enable or disable face and camera preview
@@ -87,12 +92,24 @@ class WebGazerManager {
       window.webgazer.showFaceOverlay(showPreview);
 
       window.webgazer.setGazeListener((data: any, elapsedTime: number) => {
-        if (data && data.x != null && data.y != null) {
+        if (data && data.x != null && data.y != null && !isNaN(data.x) && !isNaN(data.y)) {
           if (this.gazeCallback) {
             this.gazeCallback(data.x, data.y);
           }
         }
       });
+
+      // If WebGazer is already ready/running, resume without duplicating DOM elements
+      if (this.isRunning || (window.webgazer.isReady && window.webgazer.isReady())) {
+        try {
+          await window.webgazer.resume();
+        } catch {}
+        this.isRunning = true;
+        if (showPreview) {
+          this.styleCameraElements();
+        }
+        return true;
+      }
 
       await window.webgazer.begin();
       this.isRunning = true;
@@ -104,42 +121,97 @@ class WebGazerManager {
 
       return true;
     } catch (err) {
-      console.warn('WebGazer initialization error (camera access or permissions):', err);
+      console.warn('WebGazer begin notice (checking DOM video stream status):', err);
+      // Even if begin() had a non-critical warning, check if video feed is actively streaming
+      const feed = document.getElementById('webgazerVideoFeed') as HTMLVideoElement | null;
+      if (feed && (feed.readyState >= 1 || feed.srcObject)) {
+        this.isRunning = true;
+        if (showPreview) {
+          this.styleCameraElements();
+        }
+        return true;
+      }
       return false;
     }
   }
 
   /**
-   * Styles WebGazer video and face feedback box into a compact, professional HUD
+   * Styles WebGazer container and feedback elements into a compact, professional HUD
    */
   public styleCameraElements(): void {
     if (typeof window === 'undefined') return;
-    setTimeout(() => {
-      const feed = document.getElementById('webgazerVideoFeed');
-      const canvas = document.getElementById('webgazerVideoCanvas');
-      const box = document.getElementById('webgazerFaceFeedbackBox');
 
-      const applyCornerStyle = (el: HTMLElement | null, zIndex: number, hasBorder: boolean = false) => {
-        if (!el) return;
-        el.style.position = 'fixed';
-        el.style.bottom = '20px';
-        el.style.right = '20px';
-        el.style.top = 'auto';
-        el.style.left = 'auto';
-        el.style.width = '180px';
-        el.style.height = '135px';
-        el.style.borderRadius = '10px';
-        el.style.zIndex = `${zIndex}`;
-        if (hasBorder) {
-          el.style.border = '2px solid #38bdf8';
-          el.style.boxShadow = '0 12px 30px rgba(0, 0, 0, 0.8)';
-        }
-      };
+    const apply = () => {
+      const container = document.getElementById('webgazerVideoContainer');
+      const feed = document.getElementById('webgazerVideoFeed') as HTMLVideoElement | null;
+      const canvas = document.getElementById('webgazerVideoCanvas') as HTMLCanvasElement | null;
+      const box = document.getElementById('webgazerFaceFeedbackBox') as HTMLCanvasElement | null;
+      const overlay = document.getElementById('webgazerFaceOverlay') as HTMLCanvasElement | null;
+      const dot = document.getElementById('webgazerGazeDot');
 
-      applyCornerStyle(feed, 99990, true);
-      applyCornerStyle(canvas, 99991);
-      applyCornerStyle(box, 99992);
-    }, 500);
+      // Hide default red tracking dot (we use our Kalman GazeReticle)
+      if (dot) dot.style.display = 'none';
+
+      // Reposition parent container to bottom-right corner
+      if (container) {
+        container.style.setProperty('position', 'fixed', 'important');
+        container.style.setProperty('bottom', '24px', 'important');
+        container.style.setProperty('right', '24px', 'important');
+        container.style.setProperty('top', 'auto', 'important');
+        container.style.setProperty('left', 'auto', 'important');
+        container.style.setProperty('width', '190px', 'important');
+        container.style.setProperty('height', '142px', 'important');
+        container.style.setProperty('z-index', '99990', 'important');
+        container.style.setProperty('border-radius', '14px', 'important');
+        container.style.setProperty('overflow', 'hidden', 'important');
+        container.style.setProperty('border', '2px solid rgba(251, 191, 36, 0.7)', 'important');
+        container.style.setProperty('box-shadow', '0 12px 35px rgba(0, 0, 0, 0.85)', 'important');
+        container.style.setProperty('background-color', '#000000', 'important');
+      }
+
+      if (feed) {
+        feed.style.position = 'absolute';
+        feed.style.top = '0';
+        feed.style.left = '0';
+        feed.style.width = '100%';
+        feed.style.height = '100%';
+        feed.style.objectFit = 'cover';
+        feed.style.zIndex = '99991';
+      }
+
+      if (canvas) {
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.zIndex = '99992';
+      }
+
+      if (overlay) {
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.zIndex = '99993';
+      }
+
+      if (box) {
+        box.style.position = 'absolute';
+        box.style.top = '0';
+        box.style.left = '0';
+        box.style.width = '100%';
+        box.style.height = '100%';
+        box.style.zIndex = '99994';
+      }
+    };
+
+    apply();
+    setTimeout(apply, 80);
+    setTimeout(apply, 250);
+    setTimeout(apply, 600);
+    setTimeout(apply, 1200);
   }
 
   /**

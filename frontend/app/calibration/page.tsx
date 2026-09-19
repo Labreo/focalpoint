@@ -41,30 +41,70 @@ export default function CalibrationPage() {
   const verificationSamplesRef = useRef<{ x: number; y: number }[]>([]);
   const isVerifyingRef = useRef<boolean>(false);
 
-  // Initialize WebGazer with camera preview
+  // Initialize WebGazer with camera preview and robust feed polling
   useEffect(() => {
     let mounted = true;
 
-    webGazerManager.start((x, y) => {
-      if (isVerifyingRef.current) {
-        verificationSamplesRef.current.push({ x, y });
-      }
-    }, true).then((started) => {
-      if (mounted) {
-        if (started) {
-          setCameraReady(true);
-        } else {
-          setCameraError('Webcam access was denied or could not be initialized. Please allow camera permissions.');
+    const initWebGazer = async () => {
+      try {
+        // 1. Check browser camera permission first
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (mounted) {
+              setCameraReady(true);
+              setCameraError(null);
+            }
+            // Stop temporary stream so WebGazer can attach to webcam device
+            stream.getTracks().forEach(t => t.stop());
+          } catch (permErr: any) {
+            if (mounted) {
+              if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
+                setCameraError('Webcam access was denied. Please allow camera permissions in your browser address bar.');
+                return;
+              }
+            }
+          }
+        }
+
+        // 2. Start WebGazer tracker
+        const started = await webGazerManager.start((x, y) => {
+          if (isVerifyingRef.current) {
+            verificationSamplesRef.current.push({ x, y });
+          }
+        }, true);
+
+        if (mounted) {
+          if (started) {
+            setCameraReady(true);
+            setCameraError(null);
+            webGazerManager.styleCameraElements();
+          }
+        }
+      } catch (err: any) {
+        if (mounted) {
+          console.warn('WebGazer startup notice:', err);
         }
       }
-    }).catch((err) => {
-      if (mounted) {
-        setCameraError(`Camera error: ${err.message || err}`);
+    };
+
+    initWebGazer();
+
+    // 3. Continuous watchdog: if webgazer video feed element is playing in DOM, mark ready immediately
+    const watchdogInterval = setInterval(() => {
+      const feed = document.getElementById('webgazerVideoFeed') as HTMLVideoElement | null;
+      if (feed && (feed.readyState >= 1 || feed.srcObject)) {
+        if (mounted) {
+          setCameraReady(true);
+          setCameraError(null);
+          webGazerManager.styleCameraElements();
+        }
       }
-    });
+    }, 350);
 
     return () => {
       mounted = false;
+      clearInterval(watchdogInterval);
       webGazerManager.pause();
     };
   }, []);
@@ -190,14 +230,14 @@ export default function CalibrationPage() {
 
       {/* Main Interactive Stage */}
       <div className="relative flex-1 w-full flex items-center justify-center">
-        {cameraError ? (
+        {cameraError && !cameraReady ? (
           <div className="max-w-md rounded-xl border border-red-500/50 bg-red-950/40 p-6 text-center shadow-2xl">
             <AlertCircle className="mx-auto h-10 w-10 text-red-400 mb-3" />
             <h2 className="font-mono text-base font-bold text-white mb-2">Camera Access Required</h2>
             <p className="text-xs text-red-200 mb-4">{cameraError}</p>
             <button
               onClick={() => window.location.reload()}
-              className="rounded-lg bg-red-600 px-4 py-2 font-mono text-xs font-bold text-white hover:bg-red-500"
+              className="rounded-lg bg-red-600 px-4 py-2 font-mono text-xs font-bold text-white hover:bg-red-500 transition"
             >
               Retry Camera Permission
             </button>

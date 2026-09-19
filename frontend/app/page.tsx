@@ -234,20 +234,23 @@ export default function AdaptiveViewerPage() {
   // Toggle WebGazer Live Eye Tracking
   const handleToggleWebGazer = async () => {
     if (isWebGazerActive) {
-      webGazerManager.stop();
+      webGazerManager.pause();
       setIsWebGazerActive(false);
     } else {
       try {
         const initialized = await webGazerManager.init();
         if (initialized) {
-          await webGazerManager.start((screenX, screenY) => {
+          const started = await webGazerManager.start((screenX, screenY) => {
             if (inputMode === 'EYE_TRACKER') {
               setRawGaze({ x: screenX, y: screenY });
               handleProcessScreenGaze(screenX, screenY);
             }
-          });
-          setIsWebGazerActive(true);
-          webGazerManager.showCameraPreview(true);
+          }, true);
+          if (started) {
+            setIsWebGazerActive(true);
+            webGazerManager.showCameraPreview(true);
+            webGazerManager.styleCameraElements();
+          }
         }
       } catch (err) {
         console.warn('Failed to start WebGazer eye tracking:', err);
@@ -470,13 +473,29 @@ export default function AdaptiveViewerPage() {
             {/* Precision Broadcast Telemetry Ribbon */}
             <div className="flex flex-wrap items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-3.5 py-2 text-xs text-zinc-400 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide ${
-                  inputMode === 'EYE_TRACKER'
-                    ? 'bg-amber-400/10 text-amber-300 border border-amber-400/30'
-                    : 'bg-sky-400/10 text-sky-300 border border-sky-400/30'
-                }`}>
-                  {inputMode === 'EYE_TRACKER' ? '👁️ Iris Gaze Active' : '🖱️ Motor Assist Active'}
-                </span>
+                <button
+                  onClick={inputMode === 'EYE_TRACKER' ? handleToggleWebGazer : handleToggleInputMode}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide transition ${
+                    inputMode === 'EYE_TRACKER'
+                      ? isWebGazerActive
+                        ? 'bg-emerald-400/15 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                        : 'bg-amber-400/15 text-amber-300 border border-amber-400/40 hover:bg-amber-400/25 cursor-pointer animate-pulse'
+                      : 'bg-sky-400/10 text-sky-300 border border-sky-400/30'
+                  }`}
+                  title={
+                    inputMode === 'EYE_TRACKER'
+                      ? isWebGazerActive
+                        ? 'Webcam iris tracking active (click to pause)'
+                        : 'Webcam tracking paused - click to activate'
+                      : 'Motor Assist Mode active - click to switch to iris eye tracker'
+                  }
+                >
+                  {inputMode === 'EYE_TRACKER' 
+                    ? isWebGazerActive 
+                      ? '👁️ Iris Gaze: Tracking Live' 
+                      : '👁️ Webcam Eye Tracker: Off (Click to Start)' 
+                    : '🖱️ Motor Assist Active'}
+                </button>
                 <span className="font-mono text-zinc-300 text-[11px] truncate max-w-xs sm:max-w-md">
                   Target: {activeFocusedRegion ? activeFocusedRegion.textContent : 'No target in foveal gaze'}
                 </span>
