@@ -131,13 +131,23 @@ export interface FrameAnalysisPayload {
   regions: SemanticRegion[];
 }
 
+export type StreamMode = 
+  | 'AWS_SERVERLESS' 
+  | 'DEMO_CRICKET' 
+  | 'DEMO_LECTURE' 
+  | 'DEMO_NEWS' 
+  | 'CUSTOM_UPLOAD' 
+  | 'SCREEN_CAPTURE' 
+  | 'YOUTUBE_URL';
+
 export interface DemoScene {
   id: string;
   title: string;
-  category: 'Sports Broadcast' | 'Academic Lecture' | 'Breaking News';
+  category: 'AWS Cloud Lecture' | 'Sports Broadcast' | 'Academic Lecture' | 'Breaking News';
   description: string;
   aspectRatio: string;
   videoUrl?: string;
-  canvasRender: (ctx: CanvasRenderingContext2D, width: number, height: number, frameTime: number) => void;
+  canvasRender?: (ctx: CanvasRenderingContext2D, width: number, height: number, frameTime: number) => void;
   regions: SemanticRegion[];
 }
+

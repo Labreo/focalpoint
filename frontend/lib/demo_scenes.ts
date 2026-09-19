@@ -11,7 +11,140 @@
 import { DemoScene, SemanticRegion } from '../types';
 
 export const DEMO_SCENES: DemoScene[] = [
-  // Scene 1: Real Amateur Cricket Match (CricHeroes)
+  // Scene 1: AWS Serverless Architecture & Real-Time Vision Lecture (Hero Demo for AWS Judges)
+  {
+    id: 'aws-serverless',
+    title: 'AWS Certified Solutions Architect: Serverless Deep Dive',
+    category: 'AWS Cloud Lecture',
+    description: 'Reference architecture breakdown of event-driven zero-latency fan-out across API Gateway, Lambda, DynamoDB, Rekognition, and Polly.',
+    aspectRatio: '16:9',
+    videoUrl: '/videos/aws_serverless.mp4',
+    regions: [
+      {
+        id: 'aws_lambda_worker',
+        type: 'ACTION_ZONE',
+        confidence: 0.99,
+        boundingBox: { left: 0.28, top: 0.22, width: 0.20, height: 0.19 },
+        label: '⚡ AWS Lambda Orchestrator',
+        textContent: 'AWS Lambda Python 3.12 (2048 MB) ThreadPool fan-out across Rekognition and Polly in 650ms',
+        zoomLevel: 2.6,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'FOVEATED_OPTICAL_ZOOM',
+          zoomLevel: 2.6,
+          isolationMode: 'SPOTLIGHT'
+        }
+      },
+      {
+        id: 'aws_dynamodb_store',
+        type: 'PERSISTENT_HUD',
+        confidence: 0.99,
+        boundingBox: { left: 0.52, top: 0.22, width: 0.18, height: 0.19 },
+        label: '🗄️ Amazon DynamoDB',
+        textContent: 'Amazon DynamoDB: Single-digit millisecond latency storing user pathology profiles and calibration data',
+        zoomLevel: 2.4,
+        isolationMode: 'PERIPHERAL_DOCK',
+        extractedMetrics: {
+          service: 'DynamoDB',
+          table: 'UserProfiles',
+          latency: '< 5ms'
+        },
+        adaptationStrategy: {
+          action: 'PIN_TO_PERIPHERY',
+          anchorCorner: 'TOP_RIGHT',
+          scaleFactor: 1.75
+        }
+      },
+      {
+        id: 'aws_api_gateway',
+        type: 'PERSISTENT_HUD',
+        confidence: 0.99,
+        boundingBox: { left: 0.07, top: 0.22, width: 0.17, height: 0.19 },
+        label: '🌐 Amazon API Gateway',
+        textContent: 'Amazon API Gateway: REST API endpoint handling binary JPEG payloads with under 25ms latency',
+        zoomLevel: 2.3,
+        isolationMode: 'PERIPHERAL_DOCK',
+        adaptationStrategy: {
+          action: 'PIN_TO_PERIPHERY',
+          anchorCorner: 'BOTTOM_LEFT',
+          scaleFactor: 1.60
+        }
+      },
+      {
+        id: 'aws_rekognition_card',
+        type: 'TEXT_BLOCK',
+        confidence: 0.98,
+        boundingBox: { left: 0.07, top: 0.44, width: 0.30, height: 0.18 },
+        label: '👁️ Amazon Rekognition',
+        textContent: 'Amazon Rekognition: Real-time OCR text line extraction and facial landmark detection for lip-reading preservation',
+        zoomLevel: 2.2,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.8,
+            fontWeight: 'bold',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'aws_polly_card',
+        type: 'TEXT_BLOCK',
+        confidence: 0.98,
+        boundingBox: { left: 0.39, top: 0.44, width: 0.32, height: 0.18 },
+        label: '🔊 Amazon Polly (Neural TTS)',
+        textContent: 'Amazon Polly: Neural text-to-speech engine Joanna streaming on-demand screen audio descriptions',
+        zoomLevel: 2.2,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.8,
+            fontWeight: 'bold',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'aws_keynote_speaker',
+        type: 'FACIAL_PORTRAIT',
+        confidence: 0.96,
+        boundingBox: { left: 0.74, top: 0.14, width: 0.22, height: 0.30 },
+        label: '👤 Werner Vogels (Keynote)',
+        textContent: 'Werner Vogels presenting event-driven serverless architecture at AWS re:Invent',
+        zoomLevel: 2.5,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'SUPER_RESOLVE_AND_STABILIZE',
+          contrastBoost: 1.6,
+          edgeSharpen: true
+        }
+      },
+      {
+        id: 'aws_terminal_cli',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        boundingBox: { left: 0.04, top: 0.67, width: 0.92, height: 0.25 },
+        label: '💻 AWS Cloud Inference Terminal',
+        textContent: 'curl -X POST /api/v1/analyze-frame -> HTTP 200 OK | Latency: 653ms | Entities: [PERSISTENT_HUD, TEXT_BLOCK, ARCHITECTURE_CORRIDOR]',
+        zoomLevel: 1.8,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 2.0,
+            fontWeight: 'bold',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      }
+    ]
+  },
+  // Scene 2: Real Amateur Cricket Match (CricHeroes)
   {
     id: 'cricket-match',
     title: 'Amateur Cricket: CricHeroes Spartan Warriors Match',

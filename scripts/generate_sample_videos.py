@@ -243,7 +243,114 @@ def render_news_video():
     proc.wait()
     print("News video generated successfully.")
 
+def render_aws_serverless_video():
+    cmd = [
+        'ffmpeg', '-y',
+        '-f', 'image2pipe',
+        '-vcodec', 'ppm',
+        '-r', str(FPS),
+        '-i', '-',
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-preset', 'fast',
+        '-crf', '22',
+        'frontend/public/videos/aws_serverless.mp4'
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+
+    for f in range(TOTAL_FRAMES):
+        t = f / FPS
+        img = Image.new('RGB', (WIDTH, HEIGHT), (12, 16, 28))
+        draw = ImageDraw.Draw(img)
+
+        # Subtle dark grid background
+        for x in range(0, WIDTH, 60):
+            draw.line([(x, 0), (x, HEIGHT)], fill=(20, 26, 44), width=1)
+        for y in range(0, HEIGHT, 60):
+            draw.line([(0, y), (WIDTH, y)], fill=(20, 26, 44), width=1)
+
+        # Top AWS Header Bar
+        draw.rectangle([0, 0, WIDTH, 75], fill=(18, 24, 40), outline=(255, 153, 0), width=2)
+        # AWS Orange accent bar
+        draw.rectangle([0, 0, 16, 75], fill=(255, 153, 0))
+        draw.text((40, 14), "AWS CERTIFIED SOLUTIONS ARCHITECT: SERVERLESS DEEP DIVE", fill=(255, 255, 255), font=FONT_TITLE)
+        draw.text((40, 48), "Lecture 04: Real-Time Event-Driven Vision Pipelines on AWS", fill=(255, 153, 0), font=FONT_SM)
+
+        # Slide 1: Architecture Diagram Box
+        diag_x, diag_y, diag_w, diag_h = 50, 100, 860, 360
+        draw.rectangle([diag_x, diag_y, diag_x + diag_w, diag_y + diag_h], fill=(16, 22, 38), outline=(71, 85, 105), width=2)
+        draw.text((diag_x + 20, diag_y + 15), "REFERENCE ARCHITECTURE: ZERO-LATENCY EVENT FAN-OUT", fill=(56, 189, 248), font=FONT_SCORE)
+
+        # Block 1: API Gateway
+        draw.rectangle([diag_x + 40, diag_y + 70, diag_x + 240, diag_y + 190], fill=(24, 32, 54), outline=(255, 153, 0), width=2)
+        draw.text((diag_x + 55, diag_y + 85), "Amazon API Gateway", fill=(255, 153, 0), font=FONT_MED)
+        draw.text((diag_x + 55, diag_y + 115), "• REST API / WebSocket", fill=(226, 232, 240), font=FONT_SM)
+        draw.text((diag_x + 55, diag_y + 140), "• Binary Media (JPEG)", fill=(148, 163, 184), font=FONT_SM)
+        draw.text((diag_x + 55, diag_y + 165), "• Latency: < 25ms", fill=(52, 211, 153), font=FONT_SM)
+
+        # Arrow 1
+        arrow_pulse = int((t * 40) % 60)
+        draw.line([(diag_x + 240, diag_y + 130), (diag_x + 320, diag_y + 130)], fill=(255, 153, 0), width=3)
+        draw.polygon([(diag_x + 320, diag_y + 130), (diag_x + 310, diag_y + 125), (diag_x + 310, diag_y + 135)], fill=(255, 153, 0))
+
+        # Block 2: AWS Lambda Orchestrator
+        draw.rectangle([diag_x + 320, diag_y + 70, diag_x + 550, diag_y + 190], fill=(24, 32, 54), outline=(56, 189, 248), width=2)
+        draw.text((diag_x + 335, diag_y + 85), "AWS Lambda Orchestrator", fill=(56, 189, 248), font=FONT_MED)
+        draw.text((diag_x + 335, diag_y + 115), "• Python 3.12 (2048 MB)", fill=(226, 232, 240), font=FONT_SM)
+        draw.text((diag_x + 335, diag_y + 140), "• ThreadPool Fan-Out", fill=(148, 163, 184), font=FONT_SM)
+        draw.text((diag_x + 335, diag_y + 165), "• Execution: < 650ms", fill=(52, 211, 153), font=FONT_SM)
+
+        # Arrow 2
+        draw.line([(diag_x + 550, diag_y + 130), (diag_x + 630, diag_y + 130)], fill=(56, 189, 248), width=3)
+        draw.polygon([(diag_x + 630, diag_y + 130), (diag_x + 620, diag_y + 125), (diag_x + 620, diag_y + 135)], fill=(56, 189, 248))
+
+        # Block 3: Amazon DynamoDB
+        draw.rectangle([diag_x + 630, diag_y + 70, diag_x + 830, diag_y + 190], fill=(24, 32, 54), outline=(52, 211, 153), width=2)
+        draw.text((diag_x + 645, diag_y + 85), "Amazon DynamoDB", fill=(52, 211, 153), font=FONT_MED)
+        draw.text((diag_x + 645, diag_y + 115), "• Single-Digit Millisecond", fill=(226, 232, 240), font=FONT_SM)
+        draw.text((diag_x + 645, diag_y + 140), "• User Pathology Profiles", fill=(148, 163, 184), font=FONT_SM)
+        draw.text((diag_x + 645, diag_y + 165), "• Zero Admin Capacity", fill=(52, 211, 153), font=FONT_SM)
+
+        # Service Fan-out Cards (Rekognition & Polly)
+        draw.rectangle([diag_x + 40, diag_y + 220, diag_x + 410, diag_y + 330], fill=(20, 26, 46), outline=(168, 85, 247), width=2)
+        draw.text((diag_x + 55, diag_y + 235), "Amazon Rekognition (Computer Vision)", fill=(192, 132, 252), font=FONT_MED)
+        draw.text((diag_x + 55, diag_y + 265), "• OCR Text Line Detection & Bounding Boxes", fill=(226, 232, 240), font=FONT_SM)
+        draw.text((diag_x + 55, diag_y + 295), "• Facial Landmark Extraction for Lip-Reading", fill=(148, 163, 184), font=FONT_SM)
+
+        draw.rectangle([diag_x + 450, diag_y + 220, diag_x + 830, diag_y + 330], fill=(20, 26, 46), outline=(251, 191, 36), width=2)
+        draw.text((diag_x + 465, diag_y + 235), "Amazon Polly (Neural Speech)", fill=(251, 191, 36), font=FONT_MED)
+        draw.text((diag_x + 465, diag_y + 265), "• Neural Text-to-Speech Engine (Joanna)", fill=(226, 232, 240), font=FONT_SM)
+        draw.text((diag_x + 465, diag_y + 295), "• On-demand screen audio description", fill=(148, 163, 184), font=FONT_SM)
+
+        # AWS Instructor PIP (Top-Right)
+        pip_x, pip_y = WIDTH - 330, 100
+        draw.rectangle([pip_x, pip_y, pip_x + 280, pip_y + 210], fill=(24, 32, 54), outline=(255, 153, 0), width=3)
+        draw.ellipse([pip_x + 105, pip_y + 40, pip_x + 175, pip_y + 110], fill=(203, 213, 225))
+        draw.ellipse([pip_x + 80, pip_y + 100, pip_x + 200, pip_y + 205], fill=(71, 85, 105))
+        draw.text((pip_x + 20, pip_y + 180), "Werner Vogels (Keynote)", fill=(255, 255, 255), font=FONT_SM)
+
+        # Code / CLI Implementation Terminal (Bottom Left)
+        term_x, term_y, term_w, term_h = 50, 480, WIDTH - 100, 180
+        draw.rectangle([term_x, term_y, term_x + term_w, term_y + term_h], fill=(6, 10, 20), outline=(51, 65, 85), width=2)
+        draw.text((term_x + 20, term_y + 15), "❯ AWS Cloud Architecture Terminal — Live Inference Call", fill=(100, 116, 139), font=FONT_SM)
+        draw.text((term_x + 20, term_y + 45), "$ curl -X POST https://xxeqb4odra.execute-api.us-east-1.amazonaws.com/prod/api/v1/analyze-frame", fill=(56, 189, 248), font=FONT_SM)
+        draw.text((term_x + 20, term_y + 75), "✓ HTTP 200 OK | Latency: 653ms | Entities: [PERSISTENT_HUD, TEXT_BLOCK, ARCHITECTURE_CORRIDOR]", fill=(52, 211, 153), font=FONT_SM)
+        draw.text((term_x + 20, term_y + 105), "✓ Amazon Polly: Synthesized 28 words via Joanna neural voice stream in 240ms", fill=(251, 191, 36), font=FONT_SM)
+        draw.text((term_x + 20, term_y + 135), "✓ DynamoDB: Hydrated user pathology profile 'usr_kanak_001' (AMD Central Scotoma)", fill=(192, 132, 252), font=FONT_SM)
+
+        # Bottom Slide Footer
+        draw.rectangle([0, HEIGHT - 40, WIDTH, HEIGHT], fill=(12, 16, 28), outline=(30, 41, 59))
+        draw.text((50, HEIGHT - 28), "AWS Architecture Center • Solutions Architect Professional • Slide 04 of 28", fill=(100, 116, 139), font=FONT_SM)
+
+        img.save(proc.stdin, 'PPM')
+
+    proc.stdin.close()
+    proc.wait()
+    print("AWS Serverless video generated successfully.")
+
 if __name__ == '__main__':
+    render_aws_serverless_video()
     render_cricket_video()
     render_lecture_video()
     render_news_video()
+

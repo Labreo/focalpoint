@@ -6,7 +6,8 @@ import {
   PathologyConfig, 
   KinematicState, 
   ContrastPreset, 
-  DemoScene 
+  DemoScene,
+  StreamMode
 } from '../types';
 import { DEMO_SCENES } from '../lib/demo_scenes';
 import { GazeKalmanFilter2D } from '../lib/kalman_filter';
@@ -15,23 +16,17 @@ import { audioHaptics } from '../lib/synthetic_audio';
 import { webGazerManager } from '../lib/webgazer_adapter';
 import { focalPointClient } from '../lib/aws_client';
 import { TemporalDifferentialEngine } from '../lib/differential_engine';
-import { Navbar } from '../components/Navbar';
-import { StreamSourceSelector, StreamMode } from '../components/StreamSourceSelector';
 import { AdaptiveViewport } from '../components/AdaptiveViewport';
-import { AccessibleReaderPanel } from '../components/AccessibleReaderPanel';
-import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal';
-import { SystemSpecsModal } from '../components/SystemSpecsModal';
 import { 
-  Eye, 
-  Sparkles, 
   Volume2, 
-  ShieldCheck, 
-  Activity, 
-  Cpu, 
-  Database, 
-  Radio, 
+  Sparkles, 
   Cloud, 
-  Zap
+  Database, 
+  Upload, 
+  Eye, 
+  Crosshair, 
+  Zap,
+  Layers
 } from 'lucide-react';
 
 const DEFAULT_PATHOLOGY: PathologyConfig = {
@@ -48,18 +43,18 @@ const DEFAULT_PATHOLOGY: PathologyConfig = {
 };
 
 export default function AdaptiveViewerPage() {
-  // Media Stream & Video Source State
-  const [streamMode, setStreamMode] = useState<StreamMode>('DEMO_CRICKET');
-  const [videoSrc, setVideoSrc] = useState<string | null>('/videos/cricket.mp4');
+  // Media Stream & Video Source State (Defaults to AWS Serverless Course)
+  const [streamMode, setStreamMode] = useState<StreamMode>('AWS_SERVERLESS');
+  const [videoSrc, setVideoSrc] = useState<string | null>(DEMO_SCENES[0].videoUrl || '/videos/aws_serverless.mp4');
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [currentDemoScene, setCurrentDemoScene] = useState<DemoScene | null>(DEMO_SCENES[0]);
   const [semanticRegions, setSemanticRegions] = useState<SemanticRegion[]>(DEMO_SCENES[0].regions);
-  const [isFrozen, setIsFrozen] = useState<boolean>(false);
+  const [customUrlInput, setCustomUrlInput] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ophthalmic & Visual Configuration
   const [pathologyConfig, setPathologyConfig] = useState<PathologyConfig>(DEFAULT_PATHOLOGY);
   const [contrastPreset, setContrastPreset] = useState<ContrastPreset>('AMBER');
-  const [fontScale, setFontScale] = useState<number>(1.25);
   const [simulatorActive, setSimulatorActive] = useState<boolean>(false);
 
   // Eye Kinematics & Tracking State
@@ -70,64 +65,78 @@ export default function AdaptiveViewerPage() {
   const [activeFocusedRegion, setActiveFocusedRegion] = useState<SemanticRegion | null>(null);
   const [inputMode, setInputMode] = useState<'EYE_TRACKER' | 'MOUSE_DEBUG'>('MOUSE_DEBUG');
   const [isCalibrated, setIsCalibrated] = useState<boolean>(false);
+  const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
 
   // Pinned Peripheral HUD regions
   const [pinnedHUDRegions, setPinnedHUDRegions] = useState<SemanticRegion[]>([]);
 
-  // Telemetry & Modals
-  const [fps, setFps] = useState<number>(60);
-  const [gazeLatencyMs, setGazeLatencyMs] = useState<number>(16);
-  const [awsLatencyMs, setAwsLatencyMs] = useState<number>(240);
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
-  const [isSpecsModalOpen, setIsSpecsModalOpen] = useState<boolean>(false);
-  const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
+  // Telemetry & Audio Speech Synthesis
+  const [awsLatencyMs, setAwsLatencyMs] = useState<number>(653);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-
-  // Edge-Computed Temporal Differential Engine State
-  const diffEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.12, 6000));
-  const lastAutoAnalysisTimeRef = useRef<number>(0);
-  const [autoSyncAWS, setAutoSyncAWS] = useState<boolean>(true);
-  const [lastSyncReason, setLastSyncReason] = useState<string>('Initialization');
-  const [lastDelta, setLastDelta] = useState<number>(0);
-  const [isSceneChanging, setIsSceneChanging] = useState<boolean>(false);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [lastSyncReason, setLastSyncReason] = useState<string>('AWS Reference Pipeline Ready');
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   // Math references (persist across renders)
   const kalmanFilterRef = useRef<GazeKalmanFilter2D>(new GazeKalmanFilter2D(0.08, 18.0));
   const intentClassifierRef = useRef<KinematicIntentClassifier>(
     new KinematicIntentClassifier(DEFAULT_PATHOLOGY.dwellThresholdMs, DEFAULT_PATHOLOGY.maxDispersionPx)
   );
+  const diffEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.12, 6000));
+  const lastAutoAnalysisTimeRef = useRef<number>(0);
+  const lastLockedRegionIdRef = useRef<string | null>(null);
   const activeVideoRef = useRef<HTMLVideoElement | HTMLCanvasElement | null>(null);
   const viewportRectRef = useRef<DOMRect | null>(null);
-  const frameCountRef = useRef<number>(0);
-  const lastFpsTimeRef = useRef<number>(performance.now());
 
-  // Check calibration status on mount
+  // Hydrate user profile from DynamoDB on mount
   useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const p = await focalPointClient.getProfile('usr_kanak_001');
+        if (p) {
+          setPathologyConfig(p);
+          if (p.preferredContrastTheme) {
+            setContrastPreset(p.preferredContrastTheme);
+          }
+        }
+      } catch (e) {
+        console.warn('Profile load notice:', e);
+      }
+    };
+    loadProfile();
     setIsCalibrated(webGazerManager.isCalibrated());
   }, []);
 
   // Handle Stream Mode Switch
-  const handleSelectStreamMode = async (mode: StreamMode, customFile?: File) => {
-    // Stop existing WebRTC media tracks
+  const handleSelectStreamMode = (mode: StreamMode, customFile?: File, customUrl?: string) => {
     if (mediaStream) {
       mediaStream.getTracks().forEach(track => track.stop());
       setMediaStream(null);
     }
 
     setStreamMode(mode);
+    setActiveFocusedRegion(null);
 
-    if (mode === 'DEMO_CRICKET') {
-      setVideoSrc('/videos/cricket.mp4');
-      setCurrentDemoScene(DEMO_SCENES[0]);
-      setSemanticRegions(DEMO_SCENES[0].regions);
+    if (mode === 'AWS_SERVERLESS') {
+      const scene = DEMO_SCENES.find(s => s.id === 'aws-serverless') || DEMO_SCENES[0];
+      setVideoSrc(scene.videoUrl || '/videos/aws_serverless.mp4');
+      setCurrentDemoScene(scene);
+      setSemanticRegions(scene.regions);
+    } else if (mode === 'DEMO_CRICKET') {
+      const scene = DEMO_SCENES.find(s => s.id === 'cricket-match') || DEMO_SCENES[1];
+      setVideoSrc(scene.videoUrl || '/videos/cricket.mp4');
+      setCurrentDemoScene(scene);
+      setSemanticRegions(scene.regions);
     } else if (mode === 'DEMO_LECTURE') {
-      setVideoSrc('/videos/lecture.mp4');
-      setCurrentDemoScene(DEMO_SCENES[1]);
-      setSemanticRegions(DEMO_SCENES[1].regions);
+      const scene = DEMO_SCENES.find(s => s.id === 'academic-lecture') || DEMO_SCENES[2];
+      setVideoSrc(scene.videoUrl || '/videos/lecture.mp4');
+      setCurrentDemoScene(scene);
+      setSemanticRegions(scene.regions);
     } else if (mode === 'DEMO_NEWS') {
-      setVideoSrc('/videos/news.mp4');
-      setCurrentDemoScene(DEMO_SCENES[2]);
-      setSemanticRegions(DEMO_SCENES[2].regions);
+      const scene = DEMO_SCENES.find(s => s.id === 'global-news') || DEMO_SCENES[3];
+      setVideoSrc(scene.videoUrl || '/videos/news.mp4');
+      setCurrentDemoScene(scene);
+      setSemanticRegions(scene.regions);
     } else if (mode === 'CUSTOM_UPLOAD' && customFile) {
       const url = URL.createObjectURL(customFile);
       setVideoSrc(url);
@@ -135,48 +144,40 @@ export default function AdaptiveViewerPage() {
       setSemanticRegions([
         {
           id: 'custom_video_scan',
-          type: 'TEXT_BLOCK',
+          type: 'ACTION_ZONE',
           confidence: 0.99,
-          boundingBox: { left: 0.05, top: 0.78, width: 0.90, height: 0.16 },
-          textContent: `Ingesting "${customFile.name}" via Amazon Rekognition & Bedrock Claude 3.5 Sonnet... Look or click here.`,
-          adaptationStrategy: { action: 'DYNAMIC_REFLOW' }
+          boundingBox: { left: 0.10, top: 0.20, width: 0.80, height: 0.60 },
+          label: `Uploaded: ${customFile.name}`,
+          textContent: `Inspecting ${customFile.name} with Amazon Rekognition OCR. Direct gaze or cursor here to zoom.`,
+          zoomLevel: 2.4,
+          adaptationStrategy: { action: 'FOVEATED_OPTICAL_ZOOM', zoomLevel: 2.4 }
         }
       ]);
       setTimeout(() => {
         handleTriggerAwsAnalysis('INITIAL_FRAME', 1.0);
       }, 500);
-    } else if (mode === 'SCREEN_CAPTURE') {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        const track = stream.getVideoTracks()[0];
-        if (track) {
-          track.onended = () => {
-            handleSelectStreamMode('DEMO_CRICKET');
-          };
+    } else if (mode === 'YOUTUBE_URL' && customUrl) {
+      setVideoSrc(customUrl);
+      setCurrentDemoScene(null);
+      setSemanticRegions([
+        {
+          id: 'custom_url_target',
+          type: 'ACTION_ZONE',
+          confidence: 0.99,
+          boundingBox: { left: 0.15, top: 0.25, width: 0.70, height: 0.50 },
+          label: 'External Video Feed',
+          textContent: `Active stream from ${customUrl.slice(0, 45)}... Direct gaze to magnify.`,
+          zoomLevel: 2.4,
+          adaptationStrategy: { action: 'FOVEATED_OPTICAL_ZOOM', zoomLevel: 2.4 }
         }
-        setMediaStream(stream);
-        setVideoSrc(null);
-        setCurrentDemoScene(null);
-        setSemanticRegions([
-          {
-            id: 'screen_capture_scan',
-            type: 'TEXT_BLOCK',
-            confidence: 0.99,
-            boundingBox: { left: 0.05, top: 0.05, width: 0.90, height: 0.12 },
-            textContent: 'Live Screen Share Active: Decomposing viewport with Amazon Rekognition OCR...',
-            adaptationStrategy: { action: 'DYNAMIC_REFLOW' }
-          }
-        ]);
-        setTimeout(() => {
-          handleTriggerAwsAnalysis('INITIAL_FRAME', 1.0);
-        }, 600);
-      } catch {
-        handleSelectStreamMode('DEMO_CRICKET');
-      }
+      ]);
+      setTimeout(() => {
+        handleTriggerAwsAnalysis('INITIAL_FRAME', 1.0);
+      }, 500);
     }
   };
 
-  // Process Gaze Coordinate in Video-Relative Space
+  // Process Gaze Coordinate in Video-Relative Space (One-Shot Lock Chime)
   const handleProcessViewportGaze = useCallback((videoX: number, videoY: number, containerW: number, containerH: number) => {
     const t0 = performance.now();
 
@@ -197,12 +198,15 @@ export default function AdaptiveViewerPage() {
     setDwellProgress(classification.dwellProgress);
     setActiveFocusedRegion(classification.activeRegion);
 
-    // 3. Trigger Lock on Dwell Complete (>= 1.0)
+    // 3. Trigger Lock Chime ONLY ONCE on dwell completion (prevent continuous 880Hz audio drone!)
     if (classification.dwellProgress >= 1.0 && classification.activeRegion) {
-      audioHaptics.playLockChime();
+      if (lastLockedRegionIdRef.current !== classification.activeRegion.id) {
+        lastLockedRegionIdRef.current = classification.activeRegion.id;
+        audioHaptics.playLockChime();
+      }
+    } else if (classification.dwellProgress === 0) {
+      lastLockedRegionIdRef.current = null;
     }
-
-    setGazeLatencyMs(Math.max(8, Math.round(performance.now() - t0)));
   }, [semanticRegions]);
 
   // Screen-to-Viewport coordinate mapper for genuine webcam eye tracking
@@ -215,14 +219,12 @@ export default function AdaptiveViewerPage() {
       return;
     }
 
-    // Map screen coordinate to video-relative pixel coordinates
     const videoX = Math.max(0, Math.min(rect.width, screenX - rect.left));
     const videoY = Math.max(0, Math.min(rect.height, screenY - rect.top));
-
     handleProcessViewportGaze(videoX, videoY, rect.width, rect.height);
   }, [handleProcessViewportGaze]);
 
-  // Mouse Simulation Pointer (active only in MOUSE_DEBUG mode)
+  // Mouse Simulation Pointer (active in MOUSE_DEBUG mode)
   const handleMouseMoveSimulate = (videoX: number, videoY: number) => {
     if (inputMode !== 'MOUSE_DEBUG') return;
     const rect = viewportRectRef.current;
@@ -254,39 +256,28 @@ export default function AdaptiveViewerPage() {
           }
         }
       } catch (err) {
-        console.warn('Failed to start WebGazer eye tracking:', err);
+        console.warn('Failed to start WebGazer:', err);
         setIsWebGazerActive(false);
       }
     }
   };
 
-  // Switch between Eye Tracker and Mouse Debug Modes
   const handleToggleInputMode = () => {
-    setInputMode(prev => {
-      const next = prev === 'EYE_TRACKER' ? 'MOUSE_DEBUG' : 'EYE_TRACKER';
-      if (next === 'EYE_TRACKER' && !isWebGazerActive) {
-        handleToggleWebGazer();
-      }
-      return next;
-    });
+    const nextMode = inputMode === 'EYE_TRACKER' ? 'MOUSE_DEBUG' : 'EYE_TRACKER';
+    setInputMode(nextMode);
+    if (nextMode === 'EYE_TRACKER' && !isWebGazerActive) {
+      handleToggleWebGazer();
+    }
   };
 
-  // Cleanup WebGazer on unmount
-  useEffect(() => {
-    return () => {
-      webGazerManager.stop();
-    };
-  }, []);
-
-  // Trigger Live Deep AWS Vision Analysis (Rekognition + Bedrock Claude)
-  const handleTriggerAwsAnalysis = useCallback(async (triggerReason: string = 'manual_inspection', deltaValue: number = 0) => {
-    const video = activeVideoRef.current;
-    if (!video || isAnalyzing) return;
-
+  // Dispatches a frame to AWS Lambda Orchestrator
+  const handleTriggerAwsAnalysis = useCallback(async (triggerReason: string = 'manual_inspection', deltaValue: number = 0.15) => {
+    if (isAnalyzing) return;
     setIsAnalyzing(true);
     const t0 = performance.now();
 
     try {
+      const video = activeVideoRef.current;
       let width = 1280;
       let height = 720;
       let base64Jpeg = '';
@@ -318,7 +309,7 @@ export default function AdaptiveViewerPage() {
         );
 
         if (result.regions && result.regions.length > 0) {
-          // If user is currently focusing or dwelling, keep active focus region intact
+          // If user is dwelling or focused, preserve active region identity
           setSemanticRegions(prev => {
             if (activeFocusedRegion !== null || dwellProgress > 0) {
               const hasActive = result.regions.some((r: SemanticRegion) => r.id === activeFocusedRegion?.id);
@@ -330,14 +321,7 @@ export default function AdaptiveViewerPage() {
           });
         }
         setAwsLatencyMs(result.processingLatencyMs || Math.round(performance.now() - t0));
-        const formattedReason = triggerReason === 'SCENE_DELTA' 
-          ? 'Scene Delta' 
-          : triggerReason === 'TIMEOUT_KEEPALIVE' 
-            ? 'Keepalive' 
-            : triggerReason === 'INITIAL_FRAME' 
-              ? 'Initial Scan' 
-              : 'Manual';
-        setLastSyncReason(`${formattedReason} (${(deltaValue * 100).toFixed(1)}%)`);
+        setLastSyncReason(`AWS Rekognition Refined (${result.regions.length} entities in ${result.processingLatencyMs || Math.round(performance.now() - t0)}ms)`);
       }
     } catch (err) {
       console.warn('AWS Analysis invocation error:', err);
@@ -347,261 +331,476 @@ export default function AdaptiveViewerPage() {
     }
   }, [isAnalyzing, activeFocusedRegion, dwellProgress]);
 
-  // Edge-Computed Temporal Differential Ingestion Loop (1.6 FPS with Dwell Protection)
+  // Edge-Computed Temporal Differential Loop (6-second cooldown, protects active dwell)
   useEffect(() => {
-    if (!autoSyncAWS) return;
-
     const interval = setInterval(() => {
       const source = activeVideoRef.current;
-      // Protect user experience: Never interrupt during active dwell accumulation, focused zoom lock, or fixation!
-      if (!source || isAnalyzing || dwellProgress > 0 || activeFocusedRegion !== null || kinematicState === 'FIXATION') return;
+      // Do not interrupt while user is actively accumulating dwell progress!
+      if (!source || isAnalyzing || (dwellProgress > 0 && dwellProgress < 1.0)) return;
 
       if (source instanceof HTMLVideoElement) {
         if (source.paused || source.ended || source.readyState < 2) return;
       }
 
-      // Enforce 6-second minimum interval between automatic cloud vision dispatches
       const now = performance.now();
       if (now - lastAutoAnalysisTimeRef.current < 6000) return;
 
       const evalResult = diffEngineRef.current.evaluateFrame(source);
-      setLastDelta(evalResult.delta);
-
       if (evalResult.shouldAnalyze) {
         lastAutoAnalysisTimeRef.current = now;
-        setIsSceneChanging(true);
-        setTimeout(() => setIsSceneChanging(false), 1200);
         handleTriggerAwsAnalysis(evalResult.reason, evalResult.delta);
       }
     }, 600);
 
     return () => clearInterval(interval);
-  }, [autoSyncAWS, isAnalyzing, dwellProgress, activeFocusedRegion, kinematicState, handleTriggerAwsAnalysis]);
+  }, [isAnalyzing, dwellProgress, handleTriggerAwsAnalysis]);
 
-  // Pin & Unpin HUD widgets
-  const handlePinHUD = (region: SemanticRegion) => {
-    if (!pinnedHUDRegions.some(r => r.id === region.id)) {
-      setPinnedHUDRegions(prev => [...prev, region]);
-      audioHaptics.playLockChime();
+  // Neural Speech Synthesis using Amazon Polly
+  const handleSpeakText = async (text?: string) => {
+    if (!text || isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const audioB64 = await focalPointClient.synthesizeSpeech(text, 'Joanna');
+      if (audioB64) {
+        const audioUrl = `data:audio/mp3;base64,${audioB64}`;
+        if (!audioPlayerRef.current) {
+          audioPlayerRef.current = new Audio();
+        }
+        audioPlayerRef.current.src = audioUrl;
+        audioPlayerRef.current.onended = () => setIsSpeaking(false);
+        audioPlayerRef.current.onerror = () => setIsSpeaking(false);
+        await audioPlayerRef.current.play();
+      } else {
+        // Transparent fallback to Web Speech API if offline
+        if ('speechSynthesis' in window) {
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.onend = () => setIsSpeaking(false);
+          utter.onerror = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(utter);
+        } else {
+          setIsSpeaking(false);
+        }
+      }
+    } catch (err) {
+      console.warn('Amazon Polly playback error:', err);
+      setIsSpeaking(false);
     }
   };
 
-  const handleUnpinHUD = (regionId: string) => {
-    setPinnedHUDRegions(prev => prev.filter(r => r.id !== regionId));
-  };
-
-  // 60 FPS Counter
+  // Keyboard Shortcuts for Instant Demo Control
   useEffect(() => {
-    let animId: number;
-    const countFrame = () => {
-      frameCountRef.current++;
-      const now = performance.now();
-      if (now - lastFpsTimeRef.current >= 1000) {
-        setFps(frameCountRef.current);
-        frameCountRef.current = 0;
-        lastFpsTimeRef.current = now;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'Escape') {
+        setActiveFocusedRegion(null);
+      } else if (e.key === '1') {
+        handleSelectStreamMode('AWS_SERVERLESS');
+      } else if (e.key === '2') {
+        handleSelectStreamMode('DEMO_LECTURE');
+      } else if (e.key === '3') {
+        handleSelectStreamMode('DEMO_CRICKET');
+      } else if (e.key === '4') {
+        handleSelectStreamMode('DEMO_NEWS');
+      } else if (e.key === ' ' && activeFocusedRegion) {
+        e.preventDefault();
+        handleSpeakText(activeFocusedRegion.textContent || activeFocusedRegion.label);
+      } else if (e.key.toLowerCase() === 'm') {
+        handleToggleInputMode();
       }
-      animId = requestAnimationFrame(countFrame);
     };
-    animId = requestAnimationFrame(countFrame);
-    return () => cancelAnimationFrame(animId);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeFocusedRegion]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-amber-400 selection:text-black">
-      {/* Top Navigation */}
-      <Navbar
-        isWebGazerActive={isWebGazerActive}
-        onToggleWebGazer={handleToggleWebGazer}
-        simulatorActive={simulatorActive}
-        onToggleSimulator={() => setSimulatorActive(prev => !prev)}
-        onOpenHelp={() => setIsHelpModalOpen(true)}
-        isCalibrated={isCalibrated}
-        inputMode={inputMode}
-        onToggleInputMode={handleToggleInputMode}
-      />
-
-      {/* Main Studio Container */}
-      <main className="mx-auto max-w-7xl px-4 py-5">
-        {/* Stream Source & Precision Telemetry Bar */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <StreamSourceSelector
-            currentMode={streamMode}
-            onSelectMode={handleSelectStreamMode}
-            isStreaming={!!mediaStream}
-          />
-
-          {/* Precision Telemetry & Architecture Trigger */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-900/60 px-2.5 py-1 text-zinc-300 font-mono text-[11px] backdrop-blur-md">
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>60 FPS GPU</span>
-              </span>
-              <span className="text-zinc-600">•</span>
-              <span>{gazeLatencyMs}ms Gaze</span>
-              <span className="text-zinc-600">•</span>
-              <span className={isSceneChanging ? 'text-amber-400 font-bold' : 'text-zinc-400'}>
-                Δ {(lastDelta * 100).toFixed(1)}%
-              </span>
+    <div className="crt bg-grid bg-fixed min-h-screen text-zinc-100 flex flex-col items-center py-6 px-3 sm:px-6">
+      {/* Centered Deltea-Inspired Container (max-w-5xl) */}
+      <main className="w-full max-w-5xl flex flex-col items-center">
+        
+        {/* Header Ribbon with Deltea Retro Aesthetics */}
+        <header className="w-full flex flex-col sm:flex-row items-center justify-between gap-4 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-amber-400 text-zinc-950 flex items-center justify-center font-mono font-bold text-xl shadow-[0_0_20px_rgba(251,191,36,0.3)]">
+              FP
             </div>
-
-            <button
-              onClick={() => setIsSpecsModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-100 transition shadow-sm"
-              title="Inspect AWS Cloud Architecture & Clinical Pathology Specs"
-            >
-              <Cpu className="h-3.5 w-3.5 text-amber-400" />
-              <span>Specs & Cloud</span>
-            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-bold text-2xl tracking-tight text-zinc-50 font-mono">
+                  @focalpoint
+                </h1>
+                <span className="rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-mono px-1.5 py-0.5 font-semibold uppercase tracking-wider">
+                  AWS Ship It Track
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 font-sans mt-0.5">
+                Intent-aware assistive foveated vision for low-vision developers watching cloud lectures
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* 2-Column Grid: Video Stage + Accessible Reader */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-          {/* Left Column: Video Stage (65% width) */}
-          <div className="flex flex-col space-y-2.5 lg:col-span-8">
-            <div className="relative aspect-video w-full max-h-[70vh] mx-auto overflow-hidden rounded-2xl border border-zinc-800/80 bg-black shadow-2xl">
-              <AdaptiveViewport
-                videoSrc={videoSrc}
-                mediaStream={mediaStream}
-                demoScene={currentDemoScene}
-                semanticRegions={semanticRegions}
-                activePathology={pathologyConfig}
-                gazePoint={smoothedGaze}
-                kinematicState={kinematicState}
-                dwellProgress={dwellProgress}
-                activeFocusedRegion={activeFocusedRegion}
-                onRegionDwellComplete={(region) => {
-                  setActiveFocusedRegion(region);
-                  audioHaptics.playLockChime();
+          {/* Social / Verified Links */}
+          <div className="flex items-center gap-3 font-mono text-xs text-zinc-400">
+            <a 
+              href="https://github.com/Labreo/focalpoint" 
+              target="_blank" 
+              rel="noreferrer"
+              className="hover:text-amber-300 transition flex items-center gap-1 hover:underline"
+            >
+              <span>💾 github</span>
+            </a>
+            <span>•</span>
+            <span className="flex items-center gap-1 text-emerald-400">
+              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>live on aws</span>
+            </span>
+          </div>
+        </header>
+
+        {/* Spiky Sawtooth Divider */}
+        <div 
+          className="w-full bg-contain bg-repeat-x h-3 my-2 opacity-60" 
+          style={{ backgroundImage: "url('/spiky-divider.svg')" }} 
+        />
+
+        {/* Video Source Selector Bar: Input + Preset Chips */}
+        <section className="w-full flex flex-col gap-3 py-2">
+          {/* Custom URL or File Input Bar */}
+          <div className="flex items-center gap-2 w-full">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={customUrlInput}
+                onChange={(e) => setCustomUrlInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customUrlInput) {
+                    handleSelectStreamMode('YOUTUBE_URL', undefined, customUrlInput);
+                  }
                 }}
-                onPinHUD={handlePinHUD}
-                onResetFocus={() => setActiveFocusedRegion(null)}
-                pinnedHUDRegions={pinnedHUDRegions}
-                onUnpinHUD={handleUnpinHUD}
-                isFrozen={isFrozen}
-                simulatorActive={simulatorActive}
-                inputMode={inputMode}
-                onContainerRectChange={(rect) => { viewportRectRef.current = rect; }}
-                onMouseMoveSimulate={handleMouseMoveSimulate}
-                onSourceRef={(source) => { activeVideoRef.current = source; }}
+                placeholder="Paste any video URL or AWS course link..."
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-950/80 px-3.5 py-2 text-xs font-mono text-zinc-200 placeholder-zinc-500 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400/50"
               />
             </div>
-
-            {/* Precision Broadcast Telemetry Ribbon */}
-            <div className="flex flex-wrap items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-3.5 py-2 text-xs text-zinc-400 backdrop-blur-md">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={inputMode === 'EYE_TRACKER' ? handleToggleWebGazer : handleToggleInputMode}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide transition ${
-                    inputMode === 'EYE_TRACKER'
-                      ? isWebGazerActive
-                        ? 'bg-emerald-400/15 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                        : 'bg-amber-400/15 text-amber-300 border border-amber-400/40 hover:bg-amber-400/25 cursor-pointer animate-pulse'
-                      : 'bg-sky-400/10 text-sky-300 border border-sky-400/30'
-                  }`}
-                  title={
-                    inputMode === 'EYE_TRACKER'
-                      ? isWebGazerActive
-                        ? 'Webcam iris tracking active (click to pause)'
-                        : 'Webcam tracking paused - click to activate'
-                      : 'Motor Assist Mode active - click to switch to iris eye tracker'
-                  }
-                >
-                  {inputMode === 'EYE_TRACKER' 
-                    ? isWebGazerActive 
-                      ? '👁️ Iris Gaze: Tracking Live' 
-                      : '👁️ Webcam Eye Tracker: Off (Click to Start)' 
-                    : '🖱️ Motor Assist Active'}
-                </button>
-                <span className="font-mono text-zinc-300 text-[11px] truncate max-w-xs sm:max-w-md">
-                  Target: {activeFocusedRegion ? (activeFocusedRegion.label || activeFocusedRegion.textContent) : 'Direct cursor/gaze to zoom into players or score'}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 font-mono text-[10px] text-zinc-500">
-                <span>State: <span className="text-zinc-300">{kinematicState}</span></span>
-                <span>Dwell: <span className="text-zinc-300">{Math.round(dwellProgress * 100)}%</span></span>
-                <span className={isCalibrated ? 'text-emerald-400' : 'text-amber-400'}>
-                  {isCalibrated ? '● Calibrated' : '○ 9-Pt Pending'}
-                </span>
-                <span className="text-zinc-400">AWS: {lastSyncReason}</span>
-              </div>
-            </div>
+            <button
+              onClick={() => {
+                if (customUrlInput) {
+                  handleSelectStreamMode('YOUTUBE_URL', undefined, customUrlInput);
+                }
+              }}
+              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3.5 py-2 text-xs font-mono font-semibold border border-zinc-700 transition"
+            >
+              Load URL
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="video/mp4,video/webm"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleSelectStreamMode('CUSTOM_UPLOAD', file);
+                }
+              }}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-3 py-2 text-xs font-mono border border-zinc-800 transition cursor-pointer"
+              title="Upload custom MP4/WebM video"
+            >
+              <Upload className="size-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Upload</span>
+            </button>
           </div>
 
-          {/* Right Column: Accessible Focus Reader (35% width) */}
-          <div className="lg:col-span-4 flex flex-col">
-            <AccessibleReaderPanel
-              activeRegion={activeFocusedRegion}
-              contrastPreset={contrastPreset}
-              onContrastChange={(preset) => setContrastPreset(preset)}
-              fontScale={fontScale}
-              onFontScaleChange={(scale) => setFontScale(scale)}
-              pinnedRegions={pinnedHUDRegions}
-              onUnpinHUD={handleUnpinHUD}
-              onTriggerAwsAnalysis={() => handleTriggerAwsAnalysis('manual_inspection', lastDelta)}
-              isAnalyzing={isAnalyzing}
-              awsLatencyMs={awsLatencyMs}
-              autoSyncAWS={autoSyncAWS}
-              onToggleAutoSyncAWS={() => setAutoSyncAWS(p => !p)}
-              lastSyncReason={lastSyncReason}
-              lastDelta={lastDelta}
-              allRegions={semanticRegions}
-              onSelectRegion={(region) => {
+          {/* Instant Preset Chips */}
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <span className="text-zinc-500 text-[11px]">PRESETS:</span>
+            <button
+              onClick={() => handleSelectStreamMode('AWS_SERVERLESS')}
+              className={`rounded-md px-2.5 py-1 text-xs transition border flex items-center gap-1.5 cursor-pointer ${
+                streamMode === 'AWS_SERVERLESS'
+                  ? 'bg-amber-400/20 text-amber-300 border-amber-400/60 font-bold'
+                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+              }`}
+            >
+              <Cloud className="size-3 text-amber-400" />
+              <span>AWS Serverless Deep Dive</span>
+            </button>
+
+            <button
+              onClick={() => handleSelectStreamMode('DEMO_LECTURE')}
+              className={`rounded-md px-2.5 py-1 text-xs transition border flex items-center gap-1.5 cursor-pointer ${
+                streamMode === 'DEMO_LECTURE'
+                  ? 'bg-amber-400/20 text-amber-300 border-amber-400/60 font-bold'
+                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+              }`}
+            >
+              <Layers className="size-3 text-sky-400" />
+              <span>CS Deep Learning</span>
+            </button>
+
+            <button
+              onClick={() => handleSelectStreamMode('DEMO_CRICKET')}
+              className={`rounded-md px-2.5 py-1 text-xs transition border flex items-center gap-1.5 cursor-pointer ${
+                streamMode === 'DEMO_CRICKET'
+                  ? 'bg-amber-400/20 text-amber-300 border-amber-400/60 font-bold'
+                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+              }`}
+            >
+              <span>🏏 Cricket Telemetry</span>
+            </button>
+
+            <button
+              onClick={() => handleSelectStreamMode('DEMO_NEWS')}
+              className={`rounded-md px-2.5 py-1 text-xs transition border flex items-center gap-1.5 cursor-pointer ${
+                streamMode === 'DEMO_NEWS'
+                  ? 'bg-amber-400/20 text-amber-300 border-amber-400/60 font-bold'
+                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+              }`}
+            >
+              <span>📺 Global News</span>
+            </button>
+          </div>
+        </section>
+
+        {/* Main Stage: High-Contrast 16:9 Adaptive Viewport (Deltea Monitor Frame) */}
+        <div className="w-full my-3">
+          <div className="relative aspect-video w-full max-h-[72vh] mx-auto overflow-hidden rounded-2xl border-2 border-zinc-700/80 bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+            <AdaptiveViewport
+              videoSrc={videoSrc}
+              mediaStream={mediaStream}
+              demoScene={currentDemoScene}
+              semanticRegions={semanticRegions}
+              activePathology={pathologyConfig}
+              gazePoint={smoothedGaze}
+              kinematicState={kinematicState}
+              dwellProgress={dwellProgress}
+              activeFocusedRegion={activeFocusedRegion}
+              onRegionDwellComplete={(region) => {
                 setActiveFocusedRegion(region);
-                audioHaptics.playLockChime();
+                if (lastLockedRegionIdRef.current !== region.id) {
+                  lastLockedRegionIdRef.current = region.id;
+                  audioHaptics.playLockChime();
+                }
               }}
+              onPinHUD={(region) => {
+                if (!pinnedHUDRegions.some(r => r.id === region.id)) {
+                  setPinnedHUDRegions(prev => [...prev, region]);
+                  audioHaptics.playLockChime();
+                }
+              }}
+              onResetFocus={() => setActiveFocusedRegion(null)}
+              pinnedHUDRegions={pinnedHUDRegions}
+              onUnpinHUD={(id) => setPinnedHUDRegions(prev => prev.filter(r => r.id !== id))}
+              isFrozen={false}
+              simulatorActive={simulatorActive}
+              inputMode={inputMode}
+              onContainerRectChange={(rect) => { viewportRectRef.current = rect; }}
+              onMouseMoveSimulate={handleMouseMoveSimulate}
+              onSourceRef={(source) => { activeVideoRef.current = source; }}
             />
           </div>
         </div>
 
-        {/* Minimalist Studio Footer */}
-        <footer className="mt-12 flex flex-wrap items-center justify-between border-t border-zinc-800/80 pt-6 pb-10 text-xs text-zinc-500">
-          <div>
-            <span className="font-semibold text-zinc-400">FocalPoint Studio</span> • Assistive Video Kinematics
-            <p className="mt-0.5 font-mono text-[11px] text-zinc-600">
-              AWS Track 2: Ship It • Amazon Bedrock • Rekognition • Polly • Lambda • Amplify
-            </p>
+        {/* Action Dock: Focused Component Card + Polly Speech Button + Ophthalmic Controls */}
+        <section className="w-full flex flex-col gap-3.5 mt-2">
+          {/* Active Focused Component Card */}
+          <div className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 p-4 backdrop-blur-md shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="rounded bg-amber-400 text-zinc-950 text-[10px] font-mono font-bold px-2 py-0.5 uppercase tracking-wider">
+                  {activeFocusedRegion ? (activeFocusedRegion.label || activeFocusedRegion.type.replace('_', ' ')) : 'Foveal Focus Ready'}
+                </span>
+                <span className="font-mono text-[11px] text-zinc-500">
+                  {activeFocusedRegion ? `${activeFocusedRegion.zoomLevel || 2.4}x Optical Push-in` : 'Direct cursor or gaze to magnify'}
+                </span>
+              </div>
+              <p className="text-sm font-sans text-zinc-200 leading-relaxed">
+                {activeFocusedRegion 
+                  ? activeFocusedRegion.textContent 
+                  : 'Hover over or gaze at any architectural component (DynamoDB, Lambda, API Gateway) to smoothly magnify and isolate it.'}
+              </p>
+            </div>
+
+            {/* Actions: Speak with Amazon Polly + Reset Zoom */}
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              {activeFocusedRegion && (
+                <button
+                  onClick={() => handleSpeakText(activeFocusedRegion.textContent || activeFocusedRegion.label)}
+                  disabled={isSpeaking}
+                  className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-mono font-bold transition shadow-md cursor-pointer ${
+                    isSpeaking 
+                      ? 'bg-amber-400 text-zinc-950 animate-pulse'
+                      : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 hover:shadow-[0_0_20px_rgba(251,191,36,0.4)]'
+                  }`}
+                  title="Synthesize and speak text via Amazon Polly (Neural Voice)"
+                >
+                  <Volume2 className="size-4" />
+                  <span>{isSpeaking ? 'Speaking...' : 'Read Aloud (AWS Polly)'}</span>
+                </button>
+              )}
+
+              {activeFocusedRegion && (
+                <button
+                  onClick={() => setActiveFocusedRegion(null)}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-3 py-2 text-xs font-mono transition cursor-pointer"
+                  title="Reset zoom back to wide broadcast (Esc)"
+                >
+                  Reset (Esc)
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3 mt-3 sm:mt-0 font-mono text-[11px]">
-            <button
-              onClick={() => setIsSpecsModalOpen(true)}
-              className="hover:text-zinc-300 transition underline underline-offset-2"
+
+          {/* Quick Ergonomic Controls Toolbar */}
+          <div className="w-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-4 py-2.5 text-xs font-mono">
+            {/* Left: Input Mode & Tracking Status */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handleToggleInputMode}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition border flex items-center gap-1.5 cursor-pointer ${
+                  inputMode === 'MOUSE_DEBUG'
+                    ? 'bg-sky-400/15 text-sky-300 border-sky-400/40'
+                    : isWebGazerActive
+                      ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/40'
+                      : 'bg-amber-400/15 text-amber-300 border-amber-400/40'
+                }`}
+              >
+                {inputMode === 'MOUSE_DEBUG' ? (
+                  <>
+                    <Crosshair className="size-3 text-sky-400" />
+                    <span>🖱️ Assistive Cursor</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="size-3 text-emerald-400" />
+                    <span>👁️ Webcam Iris ({isWebGazerActive ? 'Active' : 'Off'})</span>
+                  </>
+                )}
+              </button>
+
+              <span className="text-zinc-500">|</span>
+
+              <span className="text-zinc-400 text-[11px]">
+                Dwell: <strong className="text-amber-400">{Math.round(dwellProgress * 100)}%</strong>
+              </span>
+            </div>
+
+            {/* Center: Ophthalmic Clinical Mode */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-zinc-500 text-[11px]">CLINICAL:</span>
+              <button
+                onClick={() => setSimulatorActive(p => !p)}
+                className={`rounded px-2 py-0.5 text-[11px] transition border cursor-pointer ${
+                  simulatorActive
+                    ? 'bg-amber-400 text-zinc-950 font-bold border-amber-400'
+                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                }`}
+              >
+                {simulatorActive ? '● AMD Scotoma Active' : '○ Standard View'}
+              </button>
+            </div>
+
+            {/* Right: High-Contrast Color Presets */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-zinc-500 text-[11px]">CONTRAST:</span>
+              {(['AMBER', 'CYAN', 'MINT', 'INVERT'] as ContrastPreset[]).map((preset) => (
+                <button
+                  key={preset}
+                  onClick={() => setContrastPreset(preset)}
+                  className={`rounded px-2 py-0.5 text-[10px] transition font-bold border cursor-pointer ${
+                    contrastPreset === preset
+                      ? 'border-zinc-100 bg-zinc-100 text-zinc-950'
+                      : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Spiky Sawtooth Divider */}
+        <div 
+          className="w-full bg-contain bg-repeat-x h-3 my-4 opacity-60" 
+          style={{ backgroundImage: "url('/spiky-divider.svg')" }} 
+        />
+
+        {/* AWS Architecture & Live Cloud Verification Card */}
+        <section className="w-full rounded-xl border border-zinc-800/90 bg-zinc-950/90 p-4 font-mono text-xs shadow-md">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5 mb-3">
+            <div className="flex items-center gap-2">
+              <Cloud className="size-4 text-amber-400" />
+              <span className="font-bold text-zinc-200 tracking-wide">AWS Cloud Architecture Status</span>
+              <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0.2">
+                200 OK
+              </span>
+            </div>
+            <span className="text-[11px] text-zinc-400">
+              Round-trip Latency: <strong className="text-emerald-400">{awsLatencyMs}ms</strong>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
+            <div className="flex items-start gap-2 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800/60">
+              <Zap className="size-3.5 text-amber-400 mt-0.5" />
+              <div>
+                <span className="font-bold text-zinc-300 block">Amazon Rekognition</span>
+                <span className="text-zinc-500">OCR text line vectors + facial landmarks extraction</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800/60">
+              <Volume2 className="size-3.5 text-sky-400 mt-0.5" />
+              <div>
+                <span className="font-bold text-zinc-300 block">Amazon Polly</span>
+                <span className="text-zinc-500">Neural Joanna voice for on-demand screen readouts</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800/60">
+              <Database className="size-3.5 text-emerald-400 mt-0.5" />
+              <div>
+                <span className="font-bold text-zinc-300 block">AWS Lambda & DynamoDB</span>
+                <span className="text-zinc-500">Python 3.12 orchestrator + user pathology store</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Minimalist Deltea Footer */}
+        <footer className="w-full flex flex-col sm:flex-row items-center justify-between gap-2 pt-6 pb-12 font-mono text-xs text-zinc-500">
+          <div>
+            <span>FocalPoint</span> • Bharat Builds 2026 • First Commit Hackathon (Ship It Track)
+          </div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <a 
+              href="https://main.d1s5otc6zch586.amplifyapp.com" 
+              target="_blank" 
+              rel="noreferrer"
+              className="hover:text-amber-300 transition hover:underline"
             >
-              System Specs
-            </button>
+              amplify-live ↗
+            </a>
             <span>•</span>
-            <button
-              onClick={() => setIsHelpModalOpen(true)}
-              className="hover:text-zinc-300 transition underline underline-offset-2"
+            <a 
+              href="/calibration" 
+              className="hover:text-amber-300 transition hover:underline"
             >
-              Shortcuts (?)
-            </button>
+              9-pt calibration
+            </a>
             <span>•</span>
-            <a
-              href="/calibration"
-              className="hover:text-zinc-300 transition underline underline-offset-2"
+            <a 
+              href="/profile" 
+              className="hover:text-amber-300 transition hover:underline"
             >
-              Calibration
+              clinical profile
             </a>
           </div>
         </footer>
       </main>
-
-      {/* Keyboard Shortcuts Help Modal */}
-      <KeyboardShortcutsModal
-        isOpen={isHelpModalOpen}
-        onClose={() => setIsHelpModalOpen(false)}
-      />
-
-      {/* System Specifications & Architecture Modal */}
-      <SystemSpecsModal
-        isOpen={isSpecsModalOpen}
-        onClose={() => setIsSpecsModalOpen(false)}
-        activePathology={pathologyConfig}
-        onSelectPathology={(type) => setPathologyConfig(p => ({ ...p, type }))}
-      />
     </div>
   );
 }

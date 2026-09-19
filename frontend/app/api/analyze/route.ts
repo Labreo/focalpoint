@@ -28,21 +28,22 @@ export async function POST(req: NextRequest) {
 
     // Local Synthesizer Fallback: provides realistic inference response for live demo
     const frameMetadata = body.frameMetadata || {};
-    const defaultScene = DEMO_SCENES[0];
+    const sceneId = body.sceneId || frameMetadata.sceneId;
+    const matchedScene = DEMO_SCENES.find(s => s.id === sceneId) || DEMO_SCENES[0];
 
     const responsePayload = {
       frameId: `frm_${Date.now().toString(36)}`,
       processedAt: new Date().toISOString(),
       processingLatencyMs: Date.now() - startTime + 45,
       dimensions: {
-        width: frameMetadata.width || 1920,
-        height: frameMetadata.height || 1080
+        width: frameMetadata.width || 1280,
+        height: frameMetadata.height || 720
       },
       userProfileSummary: {
         pathologyType: 'AMD',
         dwellThresholdMs: 280
       },
-      regions: defaultScene.regions
+      regions: matchedScene.regions
     };
 
     return NextResponse.json(responsePayload);
