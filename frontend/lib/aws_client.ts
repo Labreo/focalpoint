@@ -25,7 +25,8 @@ export class FocalPointCloudClient {
     width: number,
     height: number,
     userId: string = 'usr_guest',
-    triggerReason: string = 'scene_delta'
+    triggerReason: string = 'scene_delta',
+    sceneId?: string
   ): Promise<FrameAnalysisPayload> {
     const startTime = performance.now();
 
@@ -42,11 +43,13 @@ export class FocalPointCloudClient {
         body: JSON.stringify({
           userId,
           imageBase64,
+          sceneId,
           frameMetadata: {
             timestampMs: Date.now(),
             width,
             height,
-            triggerReason
+            triggerReason,
+            sceneId
           }
         })
       });

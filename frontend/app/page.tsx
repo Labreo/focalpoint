@@ -83,7 +83,7 @@ export default function AdaptiveViewerPage() {
   const intentClassifierRef = useRef<KinematicIntentClassifier>(
     new KinematicIntentClassifier(DEFAULT_PATHOLOGY.dwellThresholdMs, DEFAULT_PATHOLOGY.maxDispersionPx)
   );
-  const diffEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.12, 6000));
+  const diffEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.25, 15000));
   const lastAutoAnalysisTimeRef = useRef<number>(0);
   const lastLockedRegionIdRef = useRef<string | null>(null);
   const activeVideoRef = useRef<HTMLVideoElement | HTMLCanvasElement | null>(null);
@@ -109,6 +109,12 @@ export default function AdaptiveViewerPage() {
   useEffect(() => {
     zoomComfortLevelRef.current = zoomComfortLevel;
   }, [zoomComfortLevel]);
+
+  // Sync KinematicIntentClassifier when pathology profile updates (e.g., from DynamoDB)
+  useEffect(() => {
+    intentClassifierRef.current.setDwellThreshold(pathologyConfig.dwellThresholdMs);
+    intentClassifierRef.current.setMaxDispersion(pathologyConfig.maxDispersionPx);
+  }, [pathologyConfig]);
 
   useEffect(() => {
     activeTemporalRegionsRef.current = semanticRegions;
@@ -366,6 +372,14 @@ export default function AdaptiveViewerPage() {
   // Dispatches a frame to AWS Lambda Orchestrator
   const handleTriggerAwsAnalysis = useCallback(async (triggerReason: string = 'manual_inspection', deltaValue: number = 0.15) => {
     if (isAnalyzing) return;
+
+    // CRITICAL GUARD: When a pre-authored demo scene is active, its bounding boxes are already
+    // pixel-perfect and include temporal keyframes + timeContent slices. The API fallback route
+    // returns the same DEMO_SCENES data but LOSES temporal fields, so overwriting would destroy
+    // the working regions and cause the "random sections" bug. Only allow region replacement
+    // in CUSTOM_UPLOAD or YOUTUBE_URL mode where real Rekognition inference is needed.
+    const isDemoScene = currentDemoScene !== null;
+
     setIsAnalyzing(true);
     const t0 = performance.now();
 
@@ -398,11 +412,12 @@ export default function AdaptiveViewerPage() {
           width,
           height,
           'usr_kanak_001',
-          triggerReason
+          triggerReason,
+          currentDemoScene?.id
         );
 
-        if (result.regions && result.regions.length > 0) {
-          // If user is dwelling or focused, preserve active region identity
+        // Only update regions for custom user uploads (not pre-authored demo scenes)
+        if (!isDemoScene && result.regions && result.regions.length > 0) {
           setSemanticRegions(prev => {
             if (activeFocusedRegion !== null || dwellProgress > 0) {
               const hasActive = result.regions.some((r: SemanticRegion) => r.id === activeFocusedRegion?.id);
@@ -414,7 +429,7 @@ export default function AdaptiveViewerPage() {
           });
         }
         setAwsLatencyMs(result.processingLatencyMs || Math.round(performance.now() - t0));
-        setLastSyncReason(`AWS Rekognition Refined (${result.regions.length} entities in ${result.processingLatencyMs || Math.round(performance.now() - t0)}ms)`);
+        setLastSyncReason(`AWS Rekognition Sync (${result.regions?.length || 0} entities in ${result.processingLatencyMs || Math.round(performance.now() - t0)}ms)`);
       }
     } catch (err) {
       console.warn('AWS Analysis invocation error:', err);
@@ -422,7 +437,7 @@ export default function AdaptiveViewerPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [isAnalyzing, activeFocusedRegion, dwellProgress]);
+  }, [isAnalyzing, activeFocusedRegion, dwellProgress, currentDemoScene]);
 
   // Edge-Computed Temporal Differential Loop (6-second cooldown, protects active dwell)
   useEffect(() => {
@@ -436,7 +451,7 @@ export default function AdaptiveViewerPage() {
       }
 
       const now = performance.now();
-      if (now - lastAutoAnalysisTimeRef.current < 6000) return;
+      if (now - lastAutoAnalysisTimeRef.current < 15000) return;
 
       const evalResult = diffEngineRef.current.evaluateFrame(source);
       if (evalResult.shouldAnalyze) {
