@@ -11,7 +11,24 @@ import { GazeReticle } from './GazeReticle';
 import { computePathologyTransform } from '../lib/pathology_transforms';
 import { WebGLShaderPipeline, ShaderRenderOptions } from '../lib/webgl_shader_pipeline';
 import { TemporalTrackingEngine } from '../lib/temporal_tracker';
-import { Pin, Type, User, BarChart2, Cpu, Sparkles, Minimize2, ZoomIn, Crosshair, Layers } from 'lucide-react';
+import { WebcamPip } from './WebcamPip';
+import { 
+  Pin, 
+  Type, 
+  User, 
+  BarChart2, 
+  Cpu, 
+  Sparkles, 
+  Minimize2, 
+  Maximize, 
+  ZoomIn, 
+  Crosshair, 
+  Layers, 
+  Camera, 
+  CameraOff, 
+  MousePointer, 
+  MouseOff 
+} from 'lucide-react';
 
 interface AdaptiveViewportProps {
   videoSrc?: string | null;
@@ -36,6 +53,10 @@ interface AdaptiveViewportProps {
   onSourceRef?: (source: HTMLVideoElement | HTMLCanvasElement | null) => void;
   onContainerRectChange?: (rect: DOMRect) => void;
   onActiveRegionsUpdate?: (regions: SemanticRegion[]) => void;
+  hideMouseCursor?: boolean;
+  isWebcamActive?: boolean;
+  onToggleWebcam?: () => void;
+  onToggleHideCursor?: () => void;
 }
 
 export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
@@ -60,7 +81,11 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   onMouseMoveSimulate,
   onSourceRef,
   onContainerRectChange,
-  onActiveRegionsUpdate
+  onActiveRegionsUpdate,
+  hideMouseCursor = true,
+  isWebcamActive = false,
+  onToggleWebcam,
+  onToggleHideCursor
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -92,17 +117,51 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   const [useWebGL, setUseWebGL] = useState<boolean>(true);
   const [webGLActive, setWebGLActive] = useState<boolean>(false);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 1280, height: 720 });
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  // Escape key listener to quickly reset zoom to full overview
+  // Fullscreen toggle handler
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      if (containerRef.current) {
+        containerRef.current.requestFullscreen().catch(err => {
+          console.warn('Fullscreen request failed:', err);
+        });
+      }
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
+  // Sync fullscreen state with document events
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  // Keyboard shortcut listeners (Escape to reset zoom, F for fullscreen, W for webcam, C for cursor)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
       if (e.key === 'Escape' && onResetFocus) {
         onResetFocus();
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 'w' && onToggleWebcam) {
+        e.preventDefault();
+        onToggleWebcam();
+      } else if (e.key.toLowerCase() === 'c' && onToggleHideCursor) {
+        e.preventDefault();
+        onToggleHideCursor();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onResetFocus]);
+  }, [onResetFocus, onToggleWebcam, onToggleHideCursor]);
 
   // Measure container rect & viewport dimensions
   useEffect(() => {
@@ -333,7 +392,11 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           onResetFocus();
         }
       }}
-      className="relative flex aspect-video h-full w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-black select-none shadow-2xl cursor-crosshair"
+      className={`relative flex aspect-video h-full w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-black select-none shadow-2xl transition-all duration-200 ${
+        hideMouseCursor ? 'cursor-none [&_*]:cursor-none' : 'cursor-crosshair'
+      } ${
+        isFullscreen ? 'fixed inset-0 z-[99999] w-screen h-screen rounded-none border-0' : ''
+      }`}
       style={{
         transform: simulatorActive && (!useWebGL || !webGLActive) ? pathologyTransform.viewportTransform : undefined,
         transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)'
@@ -561,8 +624,69 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         </div>
       )}
 
-      {/* Video Overlay Playback Controls */}
-      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-1.5 rounded-lg bg-zinc-950/80 px-2 py-1 text-xs text-zinc-300 backdrop-blur-md border border-zinc-800/80 shadow-lg">
+      {/* Fullscreen Active Floating Badge */}
+      {isFullscreen && (
+        <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-zinc-950/90 border border-amber-400/40 px-4 py-1 text-[11px] font-mono text-zinc-300 backdrop-blur-md shadow-2xl animate-fade-in">
+          <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+          <span>FocalPoint Fullscreen Broadcast</span>
+          <span className="text-zinc-500">|</span>
+          <span className="text-amber-300">Esc or F to Exit</span>
+        </div>
+      )}
+
+      {/* Live Webcam Picture-in-Picture Feed (Persists in Fullscreen) */}
+      <WebcamPip
+        isActive={isWebcamActive}
+        onClose={onToggleWebcam}
+        inputMode={inputMode}
+      />
+
+      {/* Video Overlay Playback & Demo Controls */}
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-1.5 rounded-lg bg-zinc-950/85 px-2.5 py-1 text-xs text-zinc-300 backdrop-blur-md border border-zinc-800/80 shadow-2xl">
+        {/* Live Cam PIP Toggle Button */}
+        {onToggleWebcam && (
+          <button
+            onClick={onToggleWebcam}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold transition ${
+              isWebcamActive 
+                ? 'bg-amber-400 text-zinc-950 shadow-sm font-bold' 
+                : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200'
+            }`}
+            title="Toggle Live Webcam Picture-in-Picture (Shortcut: W)"
+          >
+            {isWebcamActive ? <Camera className="h-3 w-3" /> : <CameraOff className="h-3 w-3" />}
+            <span>{isWebcamActive ? 'Live Cam ON' : 'Live Cam'}</span>
+          </button>
+        )}
+
+        {/* Hide Mouse Cursor Toggle Button */}
+        {onToggleHideCursor && (
+          <button
+            onClick={onToggleHideCursor}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold transition ${
+              hideMouseCursor 
+                ? 'bg-sky-500 text-zinc-950 shadow-sm font-bold' 
+                : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200'
+            }`}
+            title="Hide system mouse pointer for recording (Shortcut: C)"
+          >
+            {hideMouseCursor ? <MouseOff className="h-3 w-3" /> : <MousePointer className="h-3 w-3" />}
+            <span>{hideMouseCursor ? 'Cursor Hidden' : 'Cursor Show'}</span>
+          </button>
+        )}
+
+        {/* Fullscreen Mode Toggle Button */}
+        <button
+          onClick={toggleFullscreen}
+          className="flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 hover:text-amber-300 transition border border-zinc-800/60"
+          title={isFullscreen ? "Exit Fullscreen (F / Esc)" : "Enter Fullscreen Mode (F)"}
+        >
+          {isFullscreen ? <Minimize2 className="h-3 w-3 text-amber-400" /> : <Maximize className="h-3 w-3 text-amber-400" />}
+          <span>{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
+        </button>
+
+        <div className="h-3.5 w-px bg-zinc-800 my-auto" />
+
         <button
           onClick={() => setUseWebGL(prev => !prev)}
           className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-semibold transition ${
@@ -573,7 +697,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           title="Toggle WebGL GPU Fragment Shader Pipeline"
         >
           <Cpu className="h-3 w-3 text-amber-400" />
-          <span>{useWebGL && webGLActive ? 'GPU Shader ON' : 'GPU Shader OFF'}</span>
+          <span>{useWebGL && webGLActive ? 'GPU' : 'CSS'}</span>
         </button>
 
         <button

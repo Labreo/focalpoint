@@ -26,7 +26,13 @@ import {
   Eye, 
   Crosshair, 
   Zap,
-  Layers
+  Layers,
+  Camera,
+  CameraOff,
+  MousePointer,
+  MouseOff,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 
 const DEFAULT_PATHOLOGY: PathologyConfig = {
@@ -67,6 +73,9 @@ export default function AdaptiveViewerPage() {
   const [isCalibrated, setIsCalibrated] = useState<boolean>(false);
   const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
   const [zoomComfortLevel, setZoomComfortLevel] = useState<'GENTLE' | 'BALANCED' | 'HIGH'>('BALANCED');
+  const [hideMouseCursor, setHideMouseCursor] = useState<boolean>(true);
+  const [isWebcamActive, setIsWebcamActive] = useState<boolean>(false);
+  const stageContainerRef = useRef<HTMLDivElement>(null);
 
   // Pinned Peripheral HUD regions
   const [pinnedHUDRegions, setPinnedHUDRegions] = useState<SemanticRegion[]>([]);
@@ -495,6 +504,17 @@ export default function AdaptiveViewerPage() {
     }
   };
 
+  // Fullscreen toggle handler
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      stageContainerRef.current?.requestFullscreen().catch(err => {
+        console.warn('Fullscreen request failed:', err);
+      });
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
   // Keyboard Shortcuts for Instant Demo Control
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -517,6 +537,15 @@ export default function AdaptiveViewerPage() {
         handleToggleInputMode();
       } else if (e.key.toLowerCase() === 't') {
         handleTareGaze();
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        handleToggleFullscreen();
+      } else if (e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        setIsWebcamActive(prev => !prev);
+      } else if (e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        setHideMouseCursor(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -676,7 +705,10 @@ export default function AdaptiveViewerPage() {
 
         {/* Main Stage: High-Contrast 16:9 Adaptive Viewport (Deltea Monitor Frame) */}
         <div className="w-full my-3">
-          <div className="relative aspect-video w-full max-h-[72vh] mx-auto overflow-hidden rounded-2xl border-2 border-zinc-700/80 bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+          <div 
+            ref={stageContainerRef}
+            className="relative aspect-video w-full max-h-[72vh] mx-auto overflow-hidden rounded-2xl border-2 border-zinc-700/80 bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+          >
             <AdaptiveViewport
               videoSrc={videoSrc}
               mediaStream={mediaStream}
@@ -688,6 +720,10 @@ export default function AdaptiveViewerPage() {
               dwellProgress={dwellProgress}
               activeFocusedRegion={activeFocusedRegion}
               zoomComfortLevel={zoomComfortLevel}
+              hideMouseCursor={hideMouseCursor}
+              isWebcamActive={isWebcamActive}
+              onToggleWebcam={() => setIsWebcamActive(prev => !prev)}
+              onToggleHideCursor={() => setHideMouseCursor(prev => !prev)}
               onActiveRegionsUpdate={(active) => {
                 activeTemporalRegionsRef.current = active;
               }}
@@ -827,6 +863,44 @@ export default function AdaptiveViewerPage() {
               <span className="text-zinc-400 text-[11px]">
                 Dwell: <strong className="text-amber-400">{Math.round(dwellProgress * 100)}%</strong>
               </span>
+
+              <span className="text-zinc-600">|</span>
+
+              {/* Demo Mode Controls: Live Cam, Hide Cursor & Fullscreen */}
+              <button
+                onClick={() => setIsWebcamActive(prev => !prev)}
+                className={`rounded px-2.5 py-1 text-[11px] font-semibold transition border flex items-center gap-1 cursor-pointer ${
+                  isWebcamActive
+                    ? 'bg-amber-400 text-zinc-950 font-bold border-amber-400 shadow-sm'
+                    : 'border-zinc-800 bg-zinc-900/90 text-zinc-300 hover:text-amber-300 hover:border-amber-400/50'
+                }`}
+                title="Toggle live camera picture-in-picture preview (Shortcut: W)"
+              >
+                {isWebcamActive ? <Camera className="size-3 text-zinc-950" /> : <CameraOff className="size-3 text-zinc-400" />}
+                <span>Live Cam (W): {isWebcamActive ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                onClick={() => setHideMouseCursor(prev => !prev)}
+                className={`rounded px-2.5 py-1 text-[11px] font-semibold transition border flex items-center gap-1 cursor-pointer ${
+                  hideMouseCursor
+                    ? 'bg-sky-500 text-zinc-950 font-bold border-sky-400 shadow-sm'
+                    : 'border-zinc-800 bg-zinc-900/90 text-zinc-300 hover:text-sky-300 hover:border-sky-400/50'
+                }`}
+                title="Hide system mouse pointer for recording (Shortcut: C)"
+              >
+                {hideMouseCursor ? <MouseOff className="size-3 text-zinc-950" /> : <MousePointer className="size-3 text-zinc-400" />}
+                <span>Cursor: {hideMouseCursor ? 'Hidden' : 'Visible'} (C)</span>
+              </button>
+
+              <button
+                onClick={handleToggleFullscreen}
+                className="rounded px-2.5 py-1 text-[11px] font-semibold transition border border-zinc-800 bg-zinc-900/90 text-zinc-300 hover:text-amber-300 hover:border-amber-400/50 flex items-center gap-1 cursor-pointer"
+                title="Enter fullscreen broadcast presentation mode (Shortcut: F)"
+              >
+                <Maximize className="size-3 text-amber-400" />
+                <span>Fullscreen (F)</span>
+              </button>
             </div>
 
             {/* Right Group: Zoom Comfort, Clinical Mode, Contrast */}

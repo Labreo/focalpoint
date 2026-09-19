@@ -182,82 +182,57 @@ export const DEMO_SCENES: DemoScene[] = [
     videoUrl: '/videos/cricket.mp4',
     regions: [
       {
-        id: 'cricket_batsman_portrait',
-        type: 'FACIAL_PORTRAIT',
+        id: 'cricket_pitch_player',
+        type: 'ACTION_ZONE',
         confidence: 0.99,
         startTime: 0.0,
-        endTime: 4.2,
-        boundingBox: { left: 0.30, top: 0.16, width: 0.36, height: 0.68 },
-        label: '👤 Striker: Sanju Samson',
-        textContent: 'Sanju Samson at the striker crease preparing to face Fazalhaq Farooqi',
+        endTime: 20.0,
+        boundingBox: { left: 0.28, top: 0.16, width: 0.44, height: 0.68 },
+        label: '🏏 Striker Batsman: Sanju Samson',
+        textContent: 'Sanju Samson at the striker crease preparing to face Fazalhaq Farooqi at Arun Jaitley Stadium',
+        timeContent: [
+          {
+            startTime: 0.0,
+            endTime: 4.2,
+            label: '👤 Striker: Sanju Samson (Focus)',
+            textContent: 'Sanju Samson at the striker crease preparing to face seaming delivery'
+          },
+          {
+            startTime: 4.2,
+            endTime: 7.8,
+            label: '🏃 Bowler Run-Up: Fazalhaq Farooqi',
+            textContent: 'Fazalhaq Farooqi bowling delivery from over the wicket'
+          },
+          {
+            startTime: 7.8,
+            endTime: 12.0,
+            label: '🏏 Boundary Stroke: Cover Drive',
+            textContent: 'Exquisite cover drive stroke racing past the infield for FOUR'
+          },
+          {
+            startTime: 12.0,
+            endTime: 20.0,
+            label: '👥 Striker: Abhishek Sharma (Partner)',
+            textContent: 'Abhishek Sharma and Sanju Samson mid-pitch partnership review'
+          }
+        ],
         zoomLevel: 1.40,
         isolationMode: 'SPOTLIGHT',
         adaptationStrategy: {
-          action: 'SUPER_RESOLVE_AND_STABILIZE',
-          contrastBoost: 1.2,
-          edgeSharpen: true
-        }
-      },
-      {
-        id: 'cricket_bowler_delivery',
-        type: 'ACTION_ZONE',
-        confidence: 0.99,
-        startTime: 4.2,
-        endTime: 7.8,
-        boundingBox: { left: 0.36, top: 0.08, width: 0.28, height: 0.78 },
-        label: '🏃 Bowler: Fazalhaq Farooqi (Run-up & Delivery)',
-        textContent: 'Fazalhaq Farooqi running in and delivering full-length seaming delivery',
-        zoomLevel: 1.35,
-        isolationMode: 'SPOTLIGHT',
-        adaptationStrategy: {
           action: 'FOVEATED_OPTICAL_ZOOM',
-          zoomLevel: 1.35,
+          zoomLevel: 1.40,
           isolationMode: 'SPOTLIGHT'
         }
       },
       {
-        id: 'cricket_stroke_replay',
-        type: 'ACTION_ZONE',
-        confidence: 0.99,
-        startTime: 7.8,
-        endTime: 12.0,
-        boundingBox: { left: 0.28, top: 0.28, width: 0.44, height: 0.54 },
-        label: '🏏 Boundary Stroke: Cover Drive',
-        textContent: 'Sanju Samson leans into exquisite cover drive racing past extra cover for FOUR',
-        zoomLevel: 1.35,
-        isolationMode: 'SPOTLIGHT',
-        adaptationStrategy: {
-          action: 'FOVEATED_OPTICAL_ZOOM',
-          zoomLevel: 1.35,
-          isolationMode: 'SPOTLIGHT'
-        }
-      },
-      {
-        id: 'cricket_batsmen_midpitch',
-        type: 'ACTION_ZONE',
-        confidence: 0.99,
-        startTime: 12.0,
-        endTime: 20.0,
-        boundingBox: { left: 0.38, top: 0.36, width: 0.24, height: 0.48 },
-        label: '👥 Partnership: Samson & Abhishek Sharma',
-        textContent: 'Sanju Samson and Abhishek Sharma confer mid-pitch after boundary',
-        zoomLevel: 1.35,
-        isolationMode: 'SPOTLIGHT',
-        adaptationStrategy: {
-          action: 'FOVEATED_OPTICAL_ZOOM',
-          zoomLevel: 1.35,
-          isolationMode: 'SPOTLIGHT'
-        }
-      },
-      {
-        id: 'cricket_scorebar',
+        id: 'cricket_match_score',
         type: 'PERSISTENT_HUD',
         confidence: 0.99,
         startTime: 0.0,
         endTime: 20.0,
-        boundingBox: { left: 0.02, top: 0.85, width: 0.96, height: 0.13 },
-        label: '📊 Live Scorebar: IND 1-0 (0.4 Ov) -> FOUR',
-        textContent: 'INDIA: 1-0 (0.4 Ov) | Samson 1 (3) | Abhishek 0 (1) | Farooqi 0-1 (0.4)',
+        boundingBox: { left: 0.01, top: 0.86, width: 0.19, height: 0.12 },
+        label: '📊 Live Score: IND 1-0 (0.4 Ov)',
+        textContent: 'INDIA: 1-0 after 0.4 overs, toss won by Afghanistan',
         zoomLevel: 1.30,
         isolationMode: 'PERIPHERAL_DOCK',
         extractedMetrics: {
@@ -268,7 +243,70 @@ export const DEMO_SCENES: DemoScene[] = [
         adaptationStrategy: {
           action: 'PIN_TO_PERIPHERY',
           anchorCorner: 'BOTTOM_RIGHT',
-          scaleFactor: 1.40
+          scaleFactor: 1.35
+        }
+      },
+      {
+        id: 'cricket_samson_stats',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        startTime: 0.0,
+        endTime: 20.0,
+        boundingBox: { left: 0.28, top: 0.86, width: 0.21, height: 0.12 },
+        label: '🏏 Striker: Samson 1 (3)',
+        textContent: 'Striker batsman Sanju Samson: 1 run scored from 3 balls faced',
+        zoomLevel: 1.40,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.5,
+            fontWeight: 'bold',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'cricket_abhishek_stats',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        startTime: 0.0,
+        endTime: 20.0,
+        boundingBox: { left: 0.50, top: 0.86, width: 0.20, height: 0.12 },
+        label: '🏏 Non-Striker: Abhishek 0 (1)',
+        textContent: 'Non-striker Abhishek Sharma: 0 runs from 1 ball faced at runner crease',
+        zoomLevel: 1.40,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.5,
+            fontWeight: 'bold',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
+        }
+      },
+      {
+        id: 'cricket_farooqi_stats',
+        type: 'TEXT_BLOCK',
+        confidence: 0.99,
+        startTime: 0.0,
+        endTime: 20.0,
+        boundingBox: { left: 0.71, top: 0.86, width: 0.27, height: 0.12 },
+        label: '🎯 Bowler: Fazalhaq 0-1 (0.4) 132 kph',
+        textContent: 'Opening bowler Fazalhaq Farooqi: 0 wickets for 1 run in 0.4 overs at 132 kilometers per hour',
+        zoomLevel: 1.40,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'DYNAMIC_REFLOW',
+          typography: {
+            preferredFont: 'Atkinson-Hyperlegible',
+            fontSizeRem: 1.5,
+            fontWeight: 'bold',
+            highContrastTheme: 'YELLOW_ON_BLACK'
+          }
         }
       }
     ]
@@ -289,7 +327,7 @@ export const DEMO_SCENES: DemoScene[] = [
         confidence: 0.99,
         startTime: 0.0,
         endTime: 20.0,
-        boundingBox: { left: 0.05, top: 0.02, width: 0.90, height: 0.16 },
+        boundingBox: { left: 0.05, top: 0.01, width: 0.90, height: 0.17 },
         label: "🔬 Evolution's Big Bang: Cambrian Explosion",
         textContent: "Evolution's Big Bang: Cambrian Explosion, 530-540 million years B.C. The sudden emergence of biological visual systems.",
         zoomLevel: 1.45,
@@ -310,7 +348,7 @@ export const DEMO_SCENES: DemoScene[] = [
         confidence: 0.99,
         startTime: 0.0,
         endTime: 20.0,
-        boundingBox: { left: 0.13, top: 0.20, width: 0.37, height: 0.67 },
+        boundingBox: { left: 0.13, top: 0.20, width: 0.38, height: 0.67 },
         label: '👁️ Trilobite Calcite Ocular Fossil',
         textContent: 'Trilobite compound eye: Rigid calcite crystal lenses preserving earliest known biological visual apparatus',
         zoomLevel: 1.40,
@@ -322,14 +360,31 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'lecture_secondary_fossils',
+        id: 'lecture_dickinsonia_fossil',
         type: 'INFOGRAPHIC',
         confidence: 0.99,
         startTime: 0.0,
         endTime: 20.0,
-        boundingBox: { left: 0.55, top: 0.18, width: 0.30, height: 0.72 },
-        label: '🔬 Ovoid & Opabinia 5-Eyed Specimens',
-        textContent: 'Cambrian predatory arthropods: Opabinia regalis featuring 5 frontal compound eyes for 360-degree vision',
+        boundingBox: { left: 0.56, top: 0.17, width: 0.28, height: 0.36 },
+        label: '🪨 Dickinsonia Ovoid Fossil',
+        textContent: 'Ediacaran-Cambrian ovoid ribbed organism fossil showing early bilateral body plan morphology',
+        zoomLevel: 1.40,
+        isolationMode: 'SPOTLIGHT',
+        adaptationStrategy: {
+          action: 'FOVEATED_OPTICAL_ZOOM',
+          zoomLevel: 1.40,
+          isolationMode: 'SPOTLIGHT'
+        }
+      },
+      {
+        id: 'lecture_opabinia_fossil',
+        type: 'INFOGRAPHIC',
+        confidence: 0.99,
+        startTime: 0.0,
+        endTime: 20.0,
+        boundingBox: { left: 0.56, top: 0.56, width: 0.28, height: 0.34 },
+        label: '🔬 Opabinia 5-Eyed Visual Organism',
+        textContent: 'Opabinia regalis: Burgess Shale predator featuring 5 compound eyes enabling omnidirectional panoramic field of view',
         zoomLevel: 1.40,
         isolationMode: 'SPOTLIGHT',
         adaptationStrategy: {
@@ -358,6 +413,23 @@ export const DEMO_SCENES: DemoScene[] = [
             highContrastTheme: 'YELLOW_ON_BLACK'
           }
         }
+      },
+      {
+        id: 'lecture_stanford_crest',
+        type: 'PERSISTENT_HUD',
+        confidence: 0.98,
+        startTime: 0.0,
+        endTime: 20.0,
+        boundingBox: { left: 0.74, top: 0.83, width: 0.18, height: 0.08 },
+        label: '🏛️ Stanford Computer Science Watermark',
+        textContent: 'Stanford University Department of Computer Science',
+        zoomLevel: 1.30,
+        isolationMode: 'PERIPHERAL_DOCK',
+        adaptationStrategy: {
+          action: 'PIN_TO_PERIPHERY',
+          anchorCorner: 'BOTTOM_RIGHT',
+          scaleFactor: 1.30
+        }
       }
     ]
   },
@@ -377,7 +449,7 @@ export const DEMO_SCENES: DemoScene[] = [
         confidence: 0.99,
         startTime: 0.0,
         endTime: 20.0,
-        boundingBox: { left: 0.08, top: 0.08, width: 0.15, height: 0.06 },
+        boundingBox: { left: 0.08, top: 0.07, width: 0.14, height: 0.08 },
         label: '🌐 Reuters Broadcast Badge',
         textContent: 'REUTERS World News Live Feed',
         zoomLevel: 1.40,
@@ -397,10 +469,24 @@ export const DEMO_SCENES: DemoScene[] = [
         type: 'TEXT_BLOCK',
         confidence: 0.99,
         startTime: 0.0,
-        endTime: 8.5,
-        boundingBox: { left: 0.08, top: 0.65, width: 0.35, height: 0.22 },
-        label: '🚨 Breaking: China Presses Iran on Red Sea',
+        endTime: 20.0,
+        boundingBox: { left: 0.07, top: 0.64, width: 0.34, height: 0.24 },
+        label: '🚨 Breaking Story: China Presses Iran on Red Sea',
         textContent: 'China presses Iran to rein in Houthi attacks in Red Sea or risk damaging business ties with Beijing',
+        timeContent: [
+          {
+            startTime: 0.0,
+            endTime: 8.5,
+            label: '🚨 Breaking: China Presses Iran on Red Sea',
+            textContent: 'China presses Iran to rein in maritime attacks in Red Sea commercial corridors'
+          },
+          {
+            startTime: 8.5,
+            endTime: 20.0,
+            label: '🛰️ Story: Drugs in Space (ISS Research)',
+            textContent: 'Drugs in space: Pharmaceutical companies launch microgravity protein crystal research aboard Space Station'
+          }
+        ],
         zoomLevel: 1.45,
         isolationMode: 'SPOTLIGHT',
         adaptationStrategy: {
@@ -414,32 +500,32 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'news_broll_footage',
+        id: 'news_video_broll',
         type: 'ACTION_ZONE',
         confidence: 0.99,
         startTime: 0.0,
         endTime: 20.0,
-        boundingBox: { left: 0.46, top: 0.08, width: 0.50, height: 0.80 },
-        label: '📹 Broadcast Video Segment',
-        textContent: 'International news segment: Commercial navigation, space station biomedical trials, pharmaceutical production',
+        boundingBox: { left: 0.35, top: 0.10, width: 0.60, height: 0.75 },
+        label: '📹 Broadcast Field Segment',
+        textContent: 'International news field footage: Commercial shipping corridors, ISS microgravity laboratory, pharmaceutical cleanrooms',
         timeContent: [
           {
             startTime: 0.0,
             endTime: 8.5,
-            label: '🚢 Red Sea Maritime Corridor',
-            textContent: 'Commercial container ships navigating the Red Sea under coalition escort'
+            label: '🚢 Red Sea Maritime Shipping Corridor',
+            textContent: 'Commercial container vessels navigating international shipping lanes'
           },
           {
             startTime: 8.5,
             endTime: 13.5,
-            label: '🛰️ ISS Orbital Microgravity Lab',
-            textContent: 'Astronauts conducting protein crystallization experiments aboard the Space Station'
+            label: '🛰️ International Space Station (ISS Orbit)',
+            textContent: 'ISS solar arrays in low Earth orbit conducting biomedical crystallography'
           },
           {
             startTime: 13.5,
             endTime: 20.0,
             label: '🔬 Pharmaceutical Cleanroom Lab',
-            textContent: 'Biomedical scientists formulating novel therapies under sterile cleanroom protocols'
+            textContent: 'Biomedical researchers formulating drug therapies under sterile cleanroom standards'
           }
         ],
         zoomLevel: 1.35,
@@ -451,20 +537,20 @@ export const DEMO_SCENES: DemoScene[] = [
         }
       },
       {
-        id: 'news_ticker_bar',
+        id: 'news_nasa_logo',
         type: 'PERSISTENT_HUD',
-        confidence: 0.99,
-        startTime: 0.0,
-        endTime: 20.0,
-        boundingBox: { left: 0.00, top: 0.88, width: 1.00, height: 0.12 },
-        label: '📈 Live Reuters Market Ticker',
-        textContent: 'REUTERS LIVE • Brent Crude $82.40 (+1.4%) • S&P 500 5,620 • Container Index +18.2%',
+        confidence: 0.98,
+        startTime: 8.5,
+        endTime: 13.5,
+        boundingBox: { left: 0.86, top: 0.08, width: 0.09, height: 0.12 },
+        label: '🚀 NASA Agency Insignia',
+        textContent: 'National Aeronautics and Space Administration official feed',
         zoomLevel: 1.30,
         isolationMode: 'PERIPHERAL_DOCK',
         adaptationStrategy: {
           action: 'PIN_TO_PERIPHERY',
-          anchorCorner: 'BOTTOM_RIGHT',
-          scaleFactor: 1.35
+          anchorCorner: 'TOP_RIGHT',
+          scaleFactor: 1.30
         }
       }
     ]
