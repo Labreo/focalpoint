@@ -71,6 +71,11 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   // Dynamic 60 FPS Temporal Keyframe Track State
   const [temporalRegions, setTemporalRegions] = useState<SemanticRegion[]>(semanticRegions);
   const lastTimeSampleRef = useRef<number>(-1);
+  const onActiveRegionsUpdateRef = useRef(onActiveRegionsUpdate);
+
+  useEffect(() => {
+    onActiveRegionsUpdateRef.current = onActiveRegionsUpdate;
+  }, [onActiveRegionsUpdate]);
 
   // Synchronize when parent changes scenes or updates semantic tracks
   useEffect(() => {
@@ -79,10 +84,8 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     const t = video ? video.currentTime : 0;
     const resolved = TemporalTrackingEngine.getActiveRegionsAtTime(semanticRegions, t);
     setTemporalRegions(resolved);
-    if (onActiveRegionsUpdate) {
-      onActiveRegionsUpdate(resolved);
-    }
-  }, [semanticRegions, onActiveRegionsUpdate]);
+    onActiveRegionsUpdateRef.current?.(resolved);
+  }, [semanticRegions]);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(true);
@@ -177,9 +180,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         lastTimeSampleRef.current = video.currentTime;
         const resolved = TemporalTrackingEngine.getActiveRegionsAtTime(semanticRegions, video.currentTime);
         setTemporalRegions(resolved);
-        if (onActiveRegionsUpdate) {
-          onActiveRegionsUpdate(resolved);
-        }
+        onActiveRegionsUpdateRef.current?.(resolved);
       }
 
       animFrameRef.current = requestAnimationFrame(renderLoop);
@@ -193,7 +194,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [useWebGL, webGLActive, activePathology, gazePoint, viewportSize, simulatorActive, semanticRegions, onActiveRegionsUpdate]);
+  }, [useWebGL, webGLActive, activePathology, gazePoint, viewportSize, simulatorActive, semanticRegions]);
 
   // Notify parent of active video source for frame capture
   useEffect(() => {

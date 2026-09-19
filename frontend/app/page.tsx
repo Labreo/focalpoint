@@ -92,6 +92,7 @@ export default function AdaptiveViewerPage() {
   const activeFocusedRegionRef = useRef<SemanticRegion | null>(null);
   const dwellProgressRef = useRef<number>(0);
   const zoomComfortLevelRef = useRef<'GENTLE' | 'BALANCED' | 'HIGH'>(zoomComfortLevel);
+  const activeTemporalRegionsRef = useRef<SemanticRegion[]>(semanticRegions);
 
   useEffect(() => {
     inputModeRef.current = inputMode;
@@ -108,6 +109,10 @@ export default function AdaptiveViewerPage() {
   useEffect(() => {
     zoomComfortLevelRef.current = zoomComfortLevel;
   }, [zoomComfortLevel]);
+
+  useEffect(() => {
+    activeTemporalRegionsRef.current = semanticRegions;
+  }, [semanticRegions]);
 
   // Hydrate user profile from DynamoDB on mount
   useEffect(() => {
@@ -170,8 +175,8 @@ export default function AdaptiveViewerPage() {
           boundingBox: { left: 0.10, top: 0.20, width: 0.80, height: 0.60 },
           label: `Uploaded: ${customFile.name}`,
           textContent: `Inspecting ${customFile.name} with Amazon Rekognition OCR. Direct gaze or cursor here to zoom.`,
-          zoomLevel: 2.4,
-          adaptationStrategy: { action: 'FOVEATED_OPTICAL_ZOOM', zoomLevel: 2.4 }
+          zoomLevel: 1.40,
+          adaptationStrategy: { action: 'FOVEATED_OPTICAL_ZOOM', zoomLevel: 1.40 }
         }
       ]);
       setTimeout(() => {
@@ -188,8 +193,8 @@ export default function AdaptiveViewerPage() {
           boundingBox: { left: 0.15, top: 0.25, width: 0.70, height: 0.50 },
           label: 'External Video Feed',
           textContent: `Active stream from ${customUrl.slice(0, 45)}... Direct gaze to magnify.`,
-          zoomLevel: 2.4,
-          adaptationStrategy: { action: 'FOVEATED_OPTICAL_ZOOM', zoomLevel: 2.4 }
+          zoomLevel: 1.40,
+          adaptationStrategy: { action: 'FOVEATED_OPTICAL_ZOOM', zoomLevel: 1.40 }
         }
       ]);
       setTimeout(() => {
@@ -206,10 +211,14 @@ export default function AdaptiveViewerPage() {
     const smoothed = kalmanFilterRef.current.update(videoX, videoY, t0);
     setSmoothedGaze({ x: smoothed.x, y: smoothed.y });
 
-    // 2. Classify via I-VDT State Machine using container dimensions
+    // 2. Classify via I-VDT State Machine using container dimensions and active temporal keyframe tracks
+    const targetRegions = activeTemporalRegionsRef.current.length > 0 
+      ? activeTemporalRegionsRef.current 
+      : semanticRegions;
+
     const classification = intentClassifierRef.current.processPoint(
       smoothed,
-      semanticRegions,
+      targetRegions,
       containerW,
       containerH,
       t0
@@ -664,7 +673,9 @@ export default function AdaptiveViewerPage() {
               dwellProgress={dwellProgress}
               activeFocusedRegion={activeFocusedRegion}
               zoomComfortLevel={zoomComfortLevel}
-              onActiveRegionsUpdate={(active) => setSemanticRegions(active)}
+              onActiveRegionsUpdate={(active) => {
+                activeTemporalRegionsRef.current = active;
+              }}
               onRegionDwellComplete={(region) => {
                 setActiveFocusedRegion(region);
                 if (lastLockedRegionIdRef.current !== region.id) {
