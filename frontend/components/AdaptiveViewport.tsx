@@ -229,7 +229,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)'
       }}
     >
-      {/* Real HTML5 Video Player (Serves as WebGL Texture Source or Fallback Renderer) */}
+      {/* Real HTML5 Video Player (Kept decoded in DOM for continuous 60 FPS WebGL texture updates) */}
       <video
         ref={videoRef}
         autoPlay
@@ -237,7 +237,9 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         loop
         muted={isMuted}
         crossOrigin="anonymous"
-        className={`h-full w-full object-contain ${useWebGL && webGLActive ? 'hidden' : 'block'}`}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+          useWebGL && webGLActive ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
         style={{
           filter: simulatorActive ? pathologyTransform.canvasFilter : undefined
         }}
@@ -246,8 +248,11 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
       {/* WebGL 2.0 / 1.0 GPU Fragment Shader Canvas (Anamorphic Radial Compression, 3x3 Laplacian Sharpening, Gaussian Scotoma) */}
       <canvas
         ref={canvasRef}
-        className={`h-full w-full object-contain ${useWebGL && webGLActive ? 'block' : 'hidden'}`}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+          useWebGL && webGLActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
       />
+
 
       {/* Pathology Mask Overlay (Fallback when WebGL is inactive) */}
       {simulatorActive && (!useWebGL || !webGLActive) && pathologyTransform.maskOverlay && (

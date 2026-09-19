@@ -1,10 +1,17 @@
 """
 Semantic Region Synthesizer for FocalPoint
 Merges multimodal inference streams (Rekognition Text, Rekognition Faces, Bedrock HUDs),
-resolves spatial overlaps via Intersection-over-Union (IoU), and assigns ophthalmic adaptation strategies.
+resolves spatial overlaps via Intersection-over-Union (IoU), aggregates fragmented text
+into coherent semantic clusters and peripheral HUDs, and assigns ophthalmic adaptation strategies.
 """
 from typing import Any, Dict, List
 import uuid
+
+# Filtering Thresholds
+MIN_FACE_AREA = 0.0035    # Normalized area: width * height must be >= 0.35% of screen
+MIN_FACE_DIM = 0.03       # Width and height must each be >= 3% of screen
+PERIPHERAL_BOTTOM_THRESHOLD = 0.76  # Lower 24% of screen for scoreboards / chyrons
+PERIPHERAL_TOP_THRESHOLD = 0.15     # Top 15% of screen for banners / header HUDs
 
 def calculate_iou(box_a: Dict[str, float], box_b: Dict[str, float]) -> float:
     """Computes Intersection over Union for two normalized bounding boxes."""
@@ -25,6 +32,93 @@ def calculate_iou(box_a: Dict[str, float], box_b: Dict[str, float]) -> float:
         return 0.0
     return intersection / union
 
+def compute_bounding_box_union(boxes: List[Dict[str, float]]) -> Dict[str, float]:
+    """Computes the minimal bounding box enclosing all input boxes."""
+    if not boxes:
+        return {"left": 0.0, "top": 0.0, "width": 0.0, "height": 0.0}
+    min_x = min(b["left"] for b in boxes)
+    min_y = min(b["top"] for b in boxes)
+    max_x = max(b["left"] + b["width"] for b in boxes)
+    max_y = max(b["top"] + b["height"] for b in boxes)
+    return {
+        "left": round(max(0.0, min_x), 4),
+        "top": round(max(0.0, min_y), 4),
+        "width": round(min(1.0 - min_x, max_x - min_x), 4),
+        "height": round(min(1.0 - min_y, max_y - min_y), 4)
+    }
+
+def synthesize_peripheral_hud(text_items: List[Dict[str, Any]], anchor: str = "BOTTOM_RIGHT") -> Dict[str, Any]:
+    """
+    Combines fragmented text detections located within a peripheral zone (e.g. scoreboard or news ticker)
+    into a single cohesive PERSISTENT_HUD entity.
+    """
+    # Sort items top-to-bottom, then left-to-right
+    sorted_items = sorted(text_items, key=lambda t: (round(t["box"]["top"] / 0.035), t["box"]["left"]))
+    
+    # Filter out single-character detached artifacts (e.g. isolated '0', 'o', '1')
+    meaningful_texts = []
+    for item in sorted_items:
+        txt = item.get("text", "").strip()
+        if len(txt) > 1:
+            meaningful_texts.append(txt)
+            
+    combined_text = " | ".join(meaningful_texts) if meaningful_texts else "Peripheral HUD"
+    boxes = [item["box"] for item in sorted_items]
+    enclosing_box = compute_bounding_box_union(boxes)
+    
+    return {
+        "box": enclosing_box,
+        "description": combined_text,
+        "suggestedAnchor": anchor,
+        "metrics": {"source": "rekognition_spatial_clustering", "tokenCount": len(sorted_items)}
+    }
+
+def cluster_adjacent_texts(texts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Clusters adjacent non-peripheral text lines into consolidated text blocks.
+    Merges lines if vertical gap <= 0.025 and horizontal proximity is detected.
+    """
+    if not texts:
+        return []
+        
+    valid_texts = [
+        t for t in texts
+        if len(t.get("text", "").strip()) > 1 or t.get("text", "").strip().isalnum()
+    ]
+    
+    sorted_texts = sorted(valid_texts, key=lambda t: (t["box"]["top"], t["box"]["left"]))
+    clusters: List[List[Dict[str, Any]]] = []
+    
+    for t in sorted_texts:
+        box = t["box"]
+        merged = False
+        for c in clusters:
+            last_box = c[-1]["box"]
+            vertical_gap = box["top"] - (last_box["top"] + last_box["height"])
+            horizontal_overlap = not (box["left"] > last_box["left"] + last_box["width"] + 0.08 or 
+                                     box["left"] + box["width"] < last_box["left"] - 0.08)
+            if 0.0 <= vertical_gap <= 0.025 and horizontal_overlap:
+                c.append(t)
+                merged = True
+                break
+        if not merged:
+            clusters.append([t])
+            
+    result = []
+    for c in clusters:
+        if len(c) == 1:
+            result.append(c[0])
+        else:
+            combined_text = " ".join(item.get("text", "").strip() for item in c)
+            boxes = [item["box"] for item in c]
+            result.append({
+                "type": "TEXT_BLOCK",
+                "text": combined_text,
+                "confidence": min(item.get("confidence", 0.9) for item in c),
+                "box": compute_bounding_box_union(boxes)
+            })
+    return result
+
 def merge_semantic_regions(
     texts: List[Dict[str, Any]],
     faces: List[Dict[str, Any]],
@@ -33,12 +127,39 @@ def merge_semantic_regions(
 ) -> List[Dict[str, Any]]:
     """
     Synthesizes discrete entity lists into a unified SemanticRegion list.
-    Prioritizes HUDs, then Faces, then Text lines.
+    Prioritizes HUDs, filters out distant micro-faces, clusters fragmented text,
+    and assigns ophthalmic adaptation strategies.
     """
     regions: List[Dict[str, Any]] = []
 
+    # If Bedrock provided no HUDs, detect and cluster peripheral text into HUDs
+    effective_huds = list(huds) if huds else []
+    remaining_texts = list(texts)
+
+    if not effective_huds and remaining_texts:
+        # Check for bottom peripheral cluster (scoreboards, broadcast chyrons)
+        bottom_texts = [
+            t for t in remaining_texts
+            if t["box"]["top"] >= PERIPHERAL_BOTTOM_THRESHOLD
+        ]
+        if len(bottom_texts) >= 2:
+            hud_obj = synthesize_peripheral_hud(bottom_texts, anchor="BOTTOM_RIGHT")
+            effective_huds.append(hud_obj)
+            # Remove consumed texts
+            remaining_texts = [t for t in remaining_texts if t not in bottom_texts]
+
+        # Check for top peripheral cluster (headers, banners)
+        top_texts = [
+            t for t in remaining_texts
+            if t["box"]["top"] + t["box"]["height"] <= PERIPHERAL_TOP_THRESHOLD
+        ]
+        if len(top_texts) >= 3:
+            hud_obj = synthesize_peripheral_hud(top_texts, anchor="TOP_RIGHT")
+            effective_huds.append(hud_obj)
+            remaining_texts = [t for t in remaining_texts if t not in top_texts]
+
     # 1. Add HUD / Scoreboard elements (highest persistence priority)
-    for idx, hud in enumerate(huds):
+    for idx, hud in enumerate(effective_huds):
         region_id = f"reg_hud_{idx + 1}"
         regions.append({
             "id": region_id,
@@ -54,8 +175,18 @@ def merge_semantic_regions(
             }
         })
 
-    # 2. Add Faces for lip-reading and emotional stabilization
-    for idx, face in enumerate(faces):
+    # 2. Add Faces for lip-reading (strictly filter out distant background micro-faces)
+    valid_faces = []
+    for face in faces:
+        box = face.get("box", {})
+        w = box.get("width", 0.0)
+        h = box.get("height", 0.0)
+        area = w * h
+        # Suppress micro-faces (outfield fielders, distant audience specs)
+        if area >= MIN_FACE_AREA and w >= MIN_FACE_DIM and h >= MIN_FACE_DIM:
+            valid_faces.append(face)
+
+    for idx, face in enumerate(valid_faces):
         # Avoid duplicate if already covered by another face
         is_duplicate = False
         for existing in regions:
@@ -80,16 +211,20 @@ def merge_semantic_regions(
             }
         })
 
-    # 3. Add Text lines for Atkinson Hyperlegible Reflow
-    for idx, text in enumerate(texts):
-        # If text is heavily overlapping with a HUD element, allow HUD to claim it or keep text as reflowable
+    # 3. Add clustered Text lines for Atkinson Hyperlegible Reflow
+    clustered_texts = cluster_adjacent_texts(remaining_texts)
+    for idx, text in enumerate(clustered_texts):
+        clean_text = text.get("text", "").strip()
+        if not clean_text or (len(clean_text) <= 1 and not clean_text.isalnum()):
+            continue
+
         region_id = f"reg_txt_{idx + 1}"
         regions.append({
             "id": region_id,
             "type": "TEXT_BLOCK",
             "boundingBox": text["box"],
             "confidence": text.get("confidence", 0.90),
-            "textContent": text.get("text", ""),
+            "textContent": clean_text,
             "adaptationStrategy": {
                 "action": "DYNAMIC_REFLOW",
                 "typography": {
@@ -115,3 +250,4 @@ def merge_semantic_regions(
     })
 
     return regions
+

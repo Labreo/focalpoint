@@ -6,7 +6,7 @@
 
 set -e
 
-STACK_NAME="focalpoint-stack"
+STACK_NAME="focalpoint-backend"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 
 echo "================================================================="
@@ -37,8 +37,9 @@ echo "[3/3] Fetching API Gateway REST Endpoint..."
 API_URL=$(aws cloudformation describe-stacks \
     --stack-name "${STACK_NAME}" \
     --region "${AWS_REGION}" \
-    --query "Stacks[0].Outputs[?OutputKey=='FocalPointApiUrl'].OutputValue" \
+    --query "Stacks[0].Outputs[?OutputKey=='ApiEndpointUrl'].OutputValue" \
     --output text)
+
 
 echo "================================================================="
 echo "  DEPLOYMENT SUCCESSFUL!"

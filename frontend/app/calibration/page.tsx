@@ -47,32 +47,13 @@ export default function CalibrationPage() {
 
     const initWebGazer = async () => {
       try {
-        // 1. Check browser camera permission first
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            if (mounted) {
-              setCameraReady(true);
-              setCameraError(null);
-            }
-            // Stop temporary stream so WebGazer can attach to webcam device
-            stream.getTracks().forEach(t => t.stop());
-          } catch (permErr: any) {
-            if (mounted) {
-              if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
-                setCameraError('Webcam access was denied. Please allow camera permissions in your browser address bar.');
-                return;
-              }
-            }
-          }
-        }
-
-        // 2. Start WebGazer tracker
+        // Start WebGazer tracker directly without device lock contention
         const started = await webGazerManager.start((x, y) => {
           if (isVerifyingRef.current) {
             verificationSamplesRef.current.push({ x, y });
           }
         }, true);
+
 
         if (mounted) {
           if (started) {
