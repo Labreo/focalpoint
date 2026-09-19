@@ -68,7 +68,7 @@ export default function AdaptiveViewerPage() {
   const [kinematicState, setKinematicState] = useState<KinematicState>('SACCADE');
   const [dwellProgress, setDwellProgress] = useState<number>(0);
   const [activeFocusedRegion, setActiveFocusedRegion] = useState<SemanticRegion | null>(null);
-  const [inputMode, setInputMode] = useState<'EYE_TRACKER' | 'MOUSE_DEBUG'>('EYE_TRACKER');
+  const [inputMode, setInputMode] = useState<'EYE_TRACKER' | 'MOUSE_DEBUG'>('MOUSE_DEBUG');
   const [isCalibrated, setIsCalibrated] = useState<boolean>(false);
 
   // Pinned Peripheral HUD regions
@@ -85,6 +85,7 @@ export default function AdaptiveViewerPage() {
 
   // Edge-Computed Temporal Differential Engine State
   const diffEngineRef = useRef<TemporalDifferentialEngine>(new TemporalDifferentialEngine(0.12, 6000));
+  const lastAutoAnalysisTimeRef = useRef<number>(0);
   const [autoSyncAWS, setAutoSyncAWS] = useState<boolean>(true);
   const [lastSyncReason, setLastSyncReason] = useState<string>('Initialization');
   const [lastDelta, setLastDelta] = useState<number>(0);
@@ -337,22 +338,28 @@ export default function AdaptiveViewerPage() {
     }
   }, [isAnalyzing]);
 
-  // Edge-Computed Temporal Differential Ingestion Loop (1.6 FPS)
+  // Edge-Computed Temporal Differential Ingestion Loop (1.6 FPS with Dwell Protection)
   useEffect(() => {
     if (!autoSyncAWS) return;
 
     const interval = setInterval(() => {
       const source = activeVideoRef.current;
-      if (!source || isAnalyzing) return;
+      // Protect user experience: Never interrupt during active dwell accumulation or focused zoom lock!
+      if (!source || isAnalyzing || dwellProgress > 0 || activeFocusedRegion !== null) return;
 
       if (source instanceof HTMLVideoElement) {
         if (source.paused || source.ended || source.readyState < 2) return;
       }
 
+      // Enforce 5-second minimum interval between automatic cloud vision dispatches
+      const now = performance.now();
+      if (now - lastAutoAnalysisTimeRef.current < 5000) return;
+
       const evalResult = diffEngineRef.current.evaluateFrame(source);
       setLastDelta(evalResult.delta);
 
       if (evalResult.shouldAnalyze) {
+        lastAutoAnalysisTimeRef.current = now;
         setIsSceneChanging(true);
         setTimeout(() => setIsSceneChanging(false), 1200);
         handleTriggerAwsAnalysis(evalResult.reason, evalResult.delta);
@@ -360,7 +367,7 @@ export default function AdaptiveViewerPage() {
     }, 600);
 
     return () => clearInterval(interval);
-  }, [autoSyncAWS, isAnalyzing, handleTriggerAwsAnalysis]);
+  }, [autoSyncAWS, isAnalyzing, dwellProgress, activeFocusedRegion, handleTriggerAwsAnalysis]);
 
   // Pin & Unpin HUD widgets
   const handlePinHUD = (region: SemanticRegion) => {
@@ -461,6 +468,9 @@ export default function AdaptiveViewerPage() {
                   audioHaptics.playLockChime();
                 }}
                 onPinHUD={handlePinHUD}
+                onResetFocus={() => setActiveFocusedRegion(null)}
+                pinnedHUDRegions={pinnedHUDRegions}
+                onUnpinHUD={handleUnpinHUD}
                 isFrozen={isFrozen}
                 simulatorActive={simulatorActive}
                 inputMode={inputMode}
@@ -497,7 +507,7 @@ export default function AdaptiveViewerPage() {
                     : '🖱️ Motor Assist Active'}
                 </button>
                 <span className="font-mono text-zinc-300 text-[11px] truncate max-w-xs sm:max-w-md">
-                  Target: {activeFocusedRegion ? activeFocusedRegion.textContent : 'No target in foveal gaze'}
+                  Target: {activeFocusedRegion ? (activeFocusedRegion.label || activeFocusedRegion.textContent) : 'Direct cursor/gaze to zoom into players or score'}
                 </span>
               </div>
               <div className="flex items-center gap-3 font-mono text-[10px] text-zinc-500">
@@ -528,6 +538,11 @@ export default function AdaptiveViewerPage() {
               onToggleAutoSyncAWS={() => setAutoSyncAWS(p => !p)}
               lastSyncReason={lastSyncReason}
               lastDelta={lastDelta}
+              allRegions={semanticRegions}
+              onSelectRegion={(region) => {
+                setActiveFocusedRegion(region);
+                audioHaptics.playLockChime();
+              }}
             />
           </div>
         </div>

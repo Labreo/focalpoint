@@ -20,6 +20,9 @@ export type SemanticRegionType =
   | 'TEXT_BLOCK' 
   | 'FACIAL_PORTRAIT' 
   | 'PERSISTENT_HUD' 
+  | 'ACTION_ZONE'
+  | 'ATHLETE_TRACK'
+  | 'INFOGRAPHIC'
   | 'BACKGROUND_CONTEXT';
 
 export interface DynamicReflowStrategy {
@@ -49,11 +52,18 @@ export interface DesaturateStrategy {
   opacity: number;
 }
 
+export interface FoveatedZoomStrategy {
+  action: 'FOVEATED_OPTICAL_ZOOM';
+  zoomLevel: number;
+  isolationMode: 'SPOTLIGHT' | 'PERIPHERAL_DOCK' | 'FULL_ZOOM';
+}
+
 export type AdaptationStrategy = 
   | DynamicReflowStrategy 
   | FaceStabilizeStrategy 
   | PinHUDStrategy 
   | DesaturateStrategy
+  | FoveatedZoomStrategy
   | { action: string; [key: string]: any };
 
 export interface SemanticRegion {
@@ -62,6 +72,9 @@ export interface SemanticRegion {
   boundingBox: BoundingBox;
   confidence: number;
   textContent?: string;
+  label?: string;
+  zoomLevel?: number;
+  isolationMode?: 'SPOTLIGHT' | 'PERIPHERAL_DOCK' | 'FULL_ZOOM';
   extractedMetrics?: Record<string, string>;
   attributes?: {
     mouthOpen?: boolean;

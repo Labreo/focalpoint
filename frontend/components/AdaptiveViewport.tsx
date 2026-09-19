@@ -10,7 +10,7 @@ import {
 import { GazeReticle } from './GazeReticle';
 import { computePathologyTransform } from '../lib/pathology_transforms';
 import { WebGLShaderPipeline, ShaderRenderOptions } from '../lib/webgl_shader_pipeline';
-import { Pin, Type, User, BarChart2, Cpu, Sparkles } from 'lucide-react';
+import { Pin, Type, User, BarChart2, Cpu, Sparkles, Minimize2, ZoomIn, Crosshair, Layers } from 'lucide-react';
 
 interface AdaptiveViewportProps {
   videoSrc?: string | null;
@@ -24,6 +24,9 @@ interface AdaptiveViewportProps {
   activeFocusedRegion: SemanticRegion | null;
   onRegionDwellComplete: (region: SemanticRegion) => void;
   onPinHUD: (region: SemanticRegion) => void;
+  onResetFocus?: () => void;
+  pinnedHUDRegions?: SemanticRegion[];
+  onUnpinHUD?: (regionId: string) => void;
   isFrozen: boolean;
   simulatorActive?: boolean;
   inputMode?: 'EYE_TRACKER' | 'MOUSE_DEBUG';
@@ -44,6 +47,9 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   activeFocusedRegion,
   onRegionDwellComplete,
   onPinHUD,
+  onResetFocus,
+  pinnedHUDRegions = [],
+  onUnpinHUD,
   isFrozen,
   simulatorActive = false,
   inputMode = 'EYE_TRACKER',
@@ -62,6 +68,17 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   const [useWebGL, setUseWebGL] = useState<boolean>(true);
   const [webGLActive, setWebGLActive] = useState<boolean>(false);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 1280, height: 720 });
+
+  // Escape key listener to quickly reset zoom to full overview
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onResetFocus) {
+        onResetFocus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onResetFocus]);
 
   // Measure container rect & viewport dimensions
   useEffect(() => {
@@ -219,132 +236,269 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     }
   };
 
+  // Dynamic Foveated Pan-Zoom Computation
+  const activeRegion = activeFocusedRegion;
+  const targetZoom = activeRegion?.zoomLevel || (activeRegion?.type === 'ACTION_ZONE' ? 2.6 : 2.2);
+
+  let currentScale = 1.0;
+  let clampedDeltaX = 0;
+  let clampedDeltaY = 0;
+
+  if (activeRegion) {
+    const progress = dwellProgress >= 1.0 ? 1.0 : Math.max(0.2, dwellProgress);
+    currentScale = 1.0 + progress * (targetZoom - 1.0);
+
+    const box = activeRegion.boundingBox;
+    const cx = box.left + box.width / 2;
+    const cy = box.top + box.height / 2;
+
+    const targetPixelX = cx * viewportSize.width;
+    const targetPixelY = cy * viewportSize.height;
+    const centerPixelX = viewportSize.width / 2;
+    const centerPixelY = viewportSize.height / 2;
+
+    const deltaX = centerPixelX - targetPixelX;
+    const deltaY = centerPixelY - targetPixelY;
+
+    const maxDeltaX = ((currentScale - 1) / 2) * viewportSize.width;
+    const maxDeltaY = ((currentScale - 1) / 2) * viewportSize.height;
+
+    clampedDeltaX = Math.max(-maxDeltaX, Math.min(maxDeltaX, deltaX));
+    clampedDeltaY = Math.max(-maxDeltaY, Math.min(maxDeltaY, deltaY));
+  }
+
   return (
     <div
       ref={containerRef}
       onPointerMove={handlePointerMove}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-black select-none shadow-2xl"
+      onClick={() => {
+        // Clicking outside any region resets zoom to full overview
+        if (activeRegion && onResetFocus) {
+          onResetFocus();
+        }
+      }}
+      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-black select-none shadow-2xl cursor-crosshair"
       style={{
         transform: simulatorActive && (!useWebGL || !webGLActive) ? pathologyTransform.viewportTransform : undefined,
         transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)'
       }}
     >
-      {/* Real HTML5 Video Player (Kept decoded in DOM for continuous 60 FPS WebGL texture updates) */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        loop
-        muted={isMuted}
-        crossOrigin="anonymous"
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
-          useWebGL && webGLActive ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        }`}
+      {/* Dynamic Foveated Zoom Stage: Scales and pans the video, canvas, and bounding boxes in lockstep */}
+      <div
+        className="absolute inset-0 h-full w-full will-change-transform"
         style={{
-          filter: simulatorActive ? pathologyTransform.canvasFilter : undefined
+          transform: `translate(${clampedDeltaX}px, ${clampedDeltaY}px) scale(${currentScale})`,
+          transformOrigin: 'center center',
+          transition: 'transform 380ms cubic-bezier(0.16, 1, 0.3, 1)'
         }}
-      />
-
-      {/* WebGL 2.0 / 1.0 GPU Fragment Shader Canvas (Anamorphic Radial Compression, 3x3 Laplacian Sharpening, Gaussian Scotoma) */}
-      <canvas
-        ref={canvasRef}
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
-          useWebGL && webGLActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-      />
-
-
-      {/* Pathology Mask Overlay (Fallback when WebGL is inactive) */}
-      {simulatorActive && (!useWebGL || !webGLActive) && pathologyTransform.maskOverlay && (
-        <div
-          className="pointer-events-none absolute inset-0 z-10"
+      >
+        {/* Real HTML5 Video Player (Kept decoded in DOM for continuous 60 FPS WebGL texture updates) */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          loop
+          muted={isMuted}
+          crossOrigin="anonymous"
+          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+            useWebGL && webGLActive ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
           style={{
-            background: pathologyTransform.maskOverlay
+            filter: simulatorActive ? pathologyTransform.canvasFilter : undefined
+          }}
+        />
+
+        {/* WebGL 2.0 / 1.0 GPU Fragment Shader Canvas */}
+        <canvas
+          ref={canvasRef}
+          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+            useWebGL && webGLActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        />
+
+        {/* Pathology Mask Overlay (Fallback when WebGL is inactive) */}
+        {simulatorActive && (!useWebGL || !webGLActive) && pathologyTransform.maskOverlay && (
+          <div
+            className="pointer-events-none absolute inset-0 z-10"
+            style={{
+              background: pathologyTransform.maskOverlay
+            }}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Interactive Semantic Region Bounding Boxes inside the Zoom Stage */}
+        <div className="pointer-events-none absolute inset-0 z-20">
+          {semanticRegions.map((region) => {
+            if (region.type === 'BACKGROUND_CONTEXT') return null;
+
+            const box = region.boundingBox;
+            const isFocused = activeFocusedRegion?.id === region.id;
+
+            let borderColor = 'border-amber-400/40 hover:border-amber-400/80';
+            let bgColor = isFocused ? 'bg-amber-400/15' : 'bg-transparent hover:bg-amber-400/5';
+            let tagBadgeColor = 'bg-amber-400 text-zinc-950';
+            let IconComponent = Type;
+            let displayBadge = region.label || region.type.replace('_', ' ');
+
+            if (region.type === 'ACTION_ZONE' || region.type === 'ATHLETE_TRACK') {
+              borderColor = 'border-amber-400/70 hover:border-amber-400';
+              bgColor = isFocused ? 'bg-amber-400/20' : 'bg-transparent hover:bg-amber-400/10';
+              tagBadgeColor = 'bg-amber-400 text-zinc-950 font-bold';
+              IconComponent = Sparkles;
+              displayBadge = region.label || 'ACTION ZONE';
+            } else if (region.type === 'FACIAL_PORTRAIT') {
+              borderColor = 'border-sky-400/70 hover:border-sky-400';
+              bgColor = isFocused ? 'bg-sky-400/20' : 'bg-transparent hover:bg-sky-400/10';
+              tagBadgeColor = 'bg-sky-400 text-zinc-950';
+              IconComponent = User;
+              displayBadge = region.label || 'FACE PORTRAIT';
+            } else if (region.type === 'PERSISTENT_HUD') {
+              borderColor = 'border-emerald-400/70 hover:border-emerald-400';
+              bgColor = isFocused ? 'bg-emerald-400/20' : 'bg-transparent hover:bg-emerald-400/10';
+              tagBadgeColor = 'bg-emerald-400 text-zinc-950';
+              IconComponent = BarChart2;
+              displayBadge = region.label || 'SCOREBOARD';
+            } else if (region.type === 'INFOGRAPHIC') {
+              borderColor = 'border-purple-400/70 hover:border-purple-400';
+              bgColor = isFocused ? 'bg-purple-400/20' : 'bg-transparent hover:bg-purple-400/10';
+              tagBadgeColor = 'bg-purple-400 text-zinc-950';
+              IconComponent = Layers;
+              displayBadge = region.label || 'DIAGRAM';
+            }
+
+            return (
+              <div
+                key={region.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRegionDwellComplete(region);
+                }}
+                className={`group pointer-events-auto absolute cursor-pointer rounded-lg border transition-all duration-150 ${borderColor} ${bgColor} ${
+                  isFocused
+                    ? 'border-amber-400 ring-2 ring-amber-400/90 ring-offset-2 ring-offset-black shadow-[0_0_40px_rgba(251,191,36,0.6)]'
+                    : ''
+                }`}
+                style={{
+                  left: `${box.left * 100}%`,
+                  top: `${box.top * 100}%`,
+                  width: `${box.width * 100}%`,
+                  height: `${box.height * 100}%`
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Select ${region.type.replace('_', ' ')}: ${region.textContent}`}
+              >
+                {/* Semantic Tag Header */}
+                <div className={`absolute -top-5 left-1 flex items-center gap-1 text-[10px] font-bold shadow-md transition-opacity duration-150 ${
+                  isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}>
+                  <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-mono shadow-sm ${tagBadgeColor}`}>
+                    <IconComponent className="h-2.5 w-2.5" />
+                    <span>{displayBadge}</span>
+                  </span>
+
+                  {/* HUD Pin Action Shortcut */}
+                  {region.type === 'PERSISTENT_HUD' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPinHUD(region);
+                      }}
+                      className="flex items-center gap-1 rounded bg-zinc-950/90 px-1.5 py-0.5 text-[9px] font-mono text-emerald-400 hover:bg-emerald-400 hover:text-black transition border border-emerald-500/30"
+                      title="Pin this scoreboard to periphery"
+                    >
+                      <Pin className="h-2 w-2" />
+                      <span>PIN</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Dwell Progress Shimmer inside bounding box */}
+                {isFocused && dwellProgress > 0 && dwellProgress < 1.0 && (
+                  <div
+                    className="absolute bottom-0 left-0 top-0 bg-amber-400/30 transition-all duration-75"
+                    style={{ width: `${dwellProgress * 100}%` }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cinematic Component Isolation Spotlight (Dims periphery outside the focused entity) */}
+      {activeRegion && currentScale > 1.15 && (
+        <div
+          className="pointer-events-none absolute inset-0 z-25 transition-opacity duration-300"
+          style={{
+            background: 'radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.0) 25%, rgba(0,0,0,0.55) 65%, rgba(0,0,0,0.85) 100%)'
           }}
           aria-hidden="true"
         />
       )}
 
-      {/* Interactive Semantic Region Bounding Boxes */}
-      <div className="pointer-events-none absolute inset-0 z-20">
-        {semanticRegions.map((region) => {
-          if (region.type === 'BACKGROUND_CONTEXT') return null;
-
-          const box = region.boundingBox;
-          const isFocused = activeFocusedRegion?.id === region.id;
-
-          let borderColor = 'border-amber-400/40 hover:border-amber-400/80';
-          let bgColor = isFocused ? 'bg-amber-400/10' : 'bg-transparent hover:bg-amber-400/5';
-          let tagBadgeColor = 'bg-amber-400 text-zinc-950';
-          let IconComponent = Type;
-
-          if (region.type === 'FACIAL_PORTRAIT') {
-            borderColor = 'border-sky-400/40 hover:border-sky-400/80';
-            bgColor = isFocused ? 'bg-sky-400/10' : 'bg-transparent hover:bg-sky-400/5';
-            tagBadgeColor = 'bg-sky-400 text-zinc-950';
-            IconComponent = User;
-          } else if (region.type === 'PERSISTENT_HUD') {
-            borderColor = 'border-emerald-400/50 hover:border-emerald-400/90';
-            bgColor = isFocused ? 'bg-emerald-400/10' : 'bg-transparent hover:bg-emerald-400/5';
-            tagBadgeColor = 'bg-emerald-400 text-zinc-950';
-            IconComponent = BarChart2;
-          }
-
-          return (
-            <div
-              key={region.id}
-              onClick={() => onRegionDwellComplete(region)}
-              className={`group pointer-events-auto absolute cursor-pointer rounded-lg border transition-all duration-150 ${borderColor} ${bgColor} ${
-                isFocused
-                  ? 'border-amber-400 ring-2 ring-amber-400/60 ring-offset-2 ring-offset-black shadow-xl'
-                  : ''
-              }`}
-              style={{
-                left: `${box.left * 100}%`,
-                top: `${box.top * 100}%`,
-                width: `${box.width * 100}%`,
-                height: `${box.height * 100}%`
+      {/* Active Assistive Lens Status Floating Pill (Top Left) */}
+      {activeRegion && currentScale > 1.15 && (
+        <div className="pointer-events-auto absolute top-3 left-3 z-30 flex items-center gap-2 rounded-xl bg-zinc-950/90 border border-amber-500/50 px-3 py-1.5 backdrop-blur-md shadow-2xl">
+          <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
+          <div className="flex flex-col">
+            <span className="font-mono text-[11px] font-bold text-zinc-100 truncate max-w-[200px] sm:max-w-xs">
+              {activeRegion.label || activeRegion.textContent || 'Component Focused'}
+            </span>
+            <span className="font-mono text-[9px] text-amber-300">
+              {currentScale.toFixed(1)}x Foveated Optical Magnification
+            </span>
+          </div>
+          {onResetFocus && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onResetFocus();
               }}
-              role="button"
-              tabIndex={0}
-              aria-label={`Select ${region.type.replace('_', ' ')}: ${region.textContent}`}
+              className="ml-2 flex items-center gap-1 rounded-md bg-zinc-800 hover:bg-zinc-700 px-2 py-1 text-[10px] font-mono text-zinc-200 hover:text-white transition border border-zinc-700"
+              title="Reset Zoom to Full Broadcast Overview (Esc)"
             >
-              {/* Semantic Tag Header (Visible on focus or hover) */}
-              <div className={`absolute -top-5 left-1 flex items-center gap-1 text-[10px] font-bold shadow-md transition-opacity duration-150 ${
-                isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-              }`}>
-                <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-mono ${tagBadgeColor}`}>
-                  <IconComponent className="h-2.5 w-2.5" />
-                  <span>{region.type === 'PERSISTENT_HUD' ? 'SCOREBOARD' : region.type.replace('_', ' ')}</span>
-                </span>
+              <Minimize2 className="h-3 w-3" />
+              <span>Overview</span>
+            </button>
+          )}
+        </div>
+      )}
 
-                {/* HUD Pin Action Shortcut */}
-                {region.type === 'PERSISTENT_HUD' && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPinHUD(region);
-                    }}
-                    className="flex items-center gap-1 rounded bg-zinc-950/90 px-1.5 py-0.5 text-[9px] font-mono text-emerald-400 hover:bg-emerald-400 hover:text-black transition border border-emerald-500/30"
-                    title="Pin this scoreboard to periphery"
-                  >
-                    <Pin className="h-2 w-2" />
-                    <span>PIN</span>
-                  </button>
-                )}
+      {/* Pinned Peripheral HUD Overlay (Top Right) */}
+      {pinnedHUDRegions && pinnedHUDRegions.length > 0 && (
+        <div className="pointer-events-auto absolute top-3 right-3 z-30 flex flex-col gap-2 max-w-xs">
+          {pinnedHUDRegions.map((hud) => (
+            <div
+              key={hud.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/50 bg-zinc-950/95 px-3 py-2 shadow-2xl backdrop-blur-md"
+            >
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 uppercase">
+                  <BarChart2 className="h-3 w-3" />
+                  <span>PINNED PERIPHERAL HUD</span>
+                </div>
+                <div className="text-xs font-bold text-zinc-100 font-mono tracking-wide">
+                  {hud.textContent}
+                </div>
               </div>
-
-              {/* Dwell Progress Shimmer inside bounding box */}
-              {isFocused && dwellProgress > 0 && (
-                <div
-                  className="absolute bottom-0 left-0 top-0 bg-amber-400/25 transition-all duration-75"
-                  style={{ width: `${dwellProgress * 100}%` }}
-                />
+              {onUnpinHUD && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUnpinHUD(hud.id);
+                  }}
+                  className="rounded bg-zinc-800 hover:bg-zinc-700 p-1 text-zinc-400 hover:text-zinc-200 transition text-[10px]"
+                  title="Unpin HUD"
+                >
+                  ✕
+                </button>
               )}
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Video Overlay Playback Controls */}
       <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex items-center gap-1.5 rounded-lg bg-zinc-950/80 px-2 py-1 text-xs text-zinc-300 backdrop-blur-md border border-zinc-800/80 shadow-lg">
