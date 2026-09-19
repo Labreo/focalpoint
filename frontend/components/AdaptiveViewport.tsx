@@ -10,6 +10,7 @@ import {
 import { GazeReticle } from './GazeReticle';
 import { computePathologyTransform } from '../lib/pathology_transforms';
 import { WebGLShaderPipeline, ShaderRenderOptions } from '../lib/webgl_shader_pipeline';
+import { TemporalTrackingEngine } from '../lib/temporal_tracker';
 import { Pin, Type, User, BarChart2, Cpu, Sparkles, Minimize2, ZoomIn, Crosshair, Layers } from 'lucide-react';
 
 interface AdaptiveViewportProps {
@@ -30,9 +31,11 @@ interface AdaptiveViewportProps {
   isFrozen: boolean;
   simulatorActive?: boolean;
   inputMode?: 'EYE_TRACKER' | 'MOUSE_DEBUG';
+  zoomComfortLevel?: 'GENTLE' | 'BALANCED' | 'HIGH';
   onMouseMoveSimulate?: (x: number, y: number) => void;
   onSourceRef?: (source: HTMLVideoElement | HTMLCanvasElement | null) => void;
   onContainerRectChange?: (rect: DOMRect) => void;
+  onActiveRegionsUpdate?: (regions: SemanticRegion[]) => void;
 }
 
 export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
@@ -53,15 +56,33 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   isFrozen,
   simulatorActive = false,
   inputMode = 'EYE_TRACKER',
+  zoomComfortLevel = 'BALANCED',
   onMouseMoveSimulate,
   onSourceRef,
-  onContainerRectChange
+  onContainerRectChange,
+  onActiveRegionsUpdate
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pipelineRef = useRef<WebGLShaderPipeline | null>(null);
   const animFrameRef = useRef<number | null>(null);
+
+  // Dynamic 60 FPS Temporal Keyframe Track State
+  const [temporalRegions, setTemporalRegions] = useState<SemanticRegion[]>(semanticRegions);
+  const lastTimeSampleRef = useRef<number>(-1);
+
+  // Synchronize when parent changes scenes or updates semantic tracks
+  useEffect(() => {
+    lastTimeSampleRef.current = -1;
+    const video = videoRef.current;
+    const t = video ? video.currentTime : 0;
+    const resolved = TemporalTrackingEngine.getActiveRegionsAtTime(semanticRegions, t);
+    setTemporalRegions(resolved);
+    if (onActiveRegionsUpdate) {
+      onActiveRegionsUpdate(resolved);
+    }
+  }, [semanticRegions, onActiveRegionsUpdate]);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(true);
@@ -151,6 +172,16 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         } catch {}
       }
 
+      // Dynamically interpolate semantic keyframe tracks at video.currentTime (25Hz sampling rate)
+      if (video && !video.paused && Math.abs(video.currentTime - lastTimeSampleRef.current) > 0.04) {
+        lastTimeSampleRef.current = video.currentTime;
+        const resolved = TemporalTrackingEngine.getActiveRegionsAtTime(semanticRegions, video.currentTime);
+        setTemporalRegions(resolved);
+        if (onActiveRegionsUpdate) {
+          onActiveRegionsUpdate(resolved);
+        }
+      }
+
       animFrameRef.current = requestAnimationFrame(renderLoop);
     };
 
@@ -162,7 +193,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [useWebGL, webGLActive, activePathology, gazePoint, viewportSize, simulatorActive]);
+  }, [useWebGL, webGLActive, activePathology, gazePoint, viewportSize, simulatorActive, semanticRegions, onActiveRegionsUpdate]);
 
   // Notify parent of active video source for frame capture
   useEffect(() => {
@@ -229,15 +260,19 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
 
   // Dynamic Foveated Pan-Zoom Computation
   const activeRegion = activeFocusedRegion;
-  const targetZoom = activeRegion?.zoomLevel || (activeRegion?.type === 'ACTION_ZONE' ? 2.6 : 2.2);
+  const baseTargetZoom = activeRegion?.zoomLevel || (activeRegion?.type === 'ACTION_ZONE' ? 1.35 : 1.45);
+  const effectiveZoomMultiplier = zoomComfortLevel === 'GENTLE' ? 0.85 : (zoomComfortLevel === 'HIGH' ? 1.20 : 1.0);
+  const targetZoom = 1.0 + (baseTargetZoom - 1.0) * effectiveZoomMultiplier;
 
   let currentScale = 1.0;
   let clampedDeltaX = 0;
   let clampedDeltaY = 0;
 
   if (activeRegion) {
-    const progress = dwellProgress >= 1.0 ? 1.0 : Math.max(0.2, dwellProgress);
-    currentScale = 1.0 + progress * (targetZoom - 1.0);
+    // Smooth Hermite Cubic Easing: S(p) = 3*p^2 - 2*p^3
+    const p = Math.max(0, Math.min(1, dwellProgress));
+    const smoothEased = 3 * p * p - 2 * p * p * p;
+    currentScale = 1.0 + smoothEased * (targetZoom - 1.0);
 
     const box = activeRegion.boundingBox;
     const cx = box.left + box.width / 2;
@@ -248,8 +283,9 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     const centerPixelX = viewportSize.width / 2;
     const centerPixelY = viewportSize.height / 2;
 
-    const deltaX = centerPixelX - targetPixelX;
-    const deltaY = centerPixelY - targetPixelY;
+    // Fractional Contextual Pan: 42% toward screen center to preserve full surrounding context
+    const deltaX = (centerPixelX - targetPixelX) * 0.42;
+    const deltaY = (centerPixelY - targetPixelY) * 0.42;
 
     const maxDeltaX = ((currentScale - 1) / 2) * viewportSize.width;
     const maxDeltaY = ((currentScale - 1) / 2) * viewportSize.height;
@@ -348,7 +384,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
 
         {/* Interactive Semantic Region Bounding Boxes inside the Zoom Stage */}
         <div className="pointer-events-none absolute inset-0 z-20">
-          {semanticRegions.map((region) => {
+          {temporalRegions.map((region) => {
             if (region.type === 'BACKGROUND_CONTEXT') return null;
 
             const box = region.boundingBox;

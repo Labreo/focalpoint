@@ -1,12 +1,12 @@
 /**
- * Direct Iris Geometric Gaze Estimator
+ * Direct Iris Geometric Gaze Estimator with 1-Euro Adaptive Filtering & Head-Pose Decoupling
  * 
- * Extracts real-time iris center and eye contour landmarks from MediaPipe FaceMesh
- * and computes direct horizontal & vertical gaze ratios.
- * 
- * Operates on frame 1 with zero manual calibration required, and continuously
- * adapts its baseline center offset as the user interacts with the application.
+ * Extracts real-time iris center and eye contour landmarks from MediaPipe FaceMesh,
+ * compensates for 3D head yaw and pitch via facial fiducial vectors, and passes coordinates
+ * through a 1-Euro adaptive filter for rock-solid low-speed fixation and zero-latency saccades.
  */
+
+import { OneEuroFilter2D } from './one_euro_filter';
 
 export interface EyeLandmarkPoints {
   leftIris: { x: number; y: number };
@@ -20,6 +20,9 @@ export interface EyeLandmarkPoints {
   rightTop: { x: number; y: number };
   rightBottom: { x: number; y: number };
   noseTip?: { x: number; y: number };
+  noseBridge?: { x: number; y: number };
+  faceLeft?: { x: number; y: number };
+  faceRight?: { x: number; y: number };
 }
 
 export interface GazeRatioResult {
@@ -35,20 +38,23 @@ export class IrisGazeTracker {
   private centerH: number = 0.50;
   private centerV: number = 0.50;
 
-  // Sensitivity amplification gains
-  private gainX: number = 3.2;
-  private gainY: number = 3.8;
+  // Calibrated ergonomic sensitivity amplification gains
+  private gainX: number = 2.2;
+  private gainY: number = 2.4;
 
-  // Exponential moving average smoothing
-  private smoothedScreenX: number | null = null;
-  private smoothedScreenY: number | null = null;
-  private readonly alpha: number = 0.35; // Responsive yet smooth
+  // Head-pose decoupling weights
+  private headYawWeight: number = 0.45;
+  private headPitchWeight: number = 0.35;
 
-  // Calibration point memory
-  private sampleCount: number = 0;
+  // 1-Euro Adaptive Filter (minCutoff=0.9Hz for rock-solid fixation, beta=0.015 for fast saccades)
+  private euroFilter: OneEuroFilter2D = new OneEuroFilter2D(0.9, 0.015, 1.0);
+
+  // Last computed raw ratios for instant 1-tap center tare
+  private lastRawH: number = 0.50;
+  private lastRawV: number = 0.50;
 
   /**
-   * Landmark Indices from Google MediaPipe FaceMesh (with Iris model):
+   * Landmark Indices from Google MediaPipe FaceMesh:
    * 468: Right Iris Center
    * 473: Left Iris Center
    * 33:  Left Eye Outer Corner
@@ -59,7 +65,10 @@ export class IrisGazeTracker {
    * 263: Right Eye Outer Corner
    * 386: Right Upper Eyelid
    * 374: Right Lower Eyelid
-   * 4:   Nose Tip (reference)
+   * 4:   Nose Tip
+   * 168: Nose Bridge (between eyes)
+   * 234: Right Zygomatic cheek/ear boundary
+   * 454: Left Zygomatic cheek/ear boundary
    */
   public extractLandmarks(positions: any): EyeLandmarkPoints | null {
     if (!positions || positions.length < 468) return null;
@@ -76,7 +85,6 @@ export class IrisGazeTracker {
       return null;
     };
 
-    // If iris center 473/468 is not available, fall back to average of iris contour
     let leftIris = getPt(473);
     let rightIris = getPt(468);
 
@@ -120,22 +128,27 @@ export class IrisGazeTracker {
       rightOuter,
       rightTop,
       rightBottom,
-      noseTip: getPt(4) || undefined
+      noseTip: getPt(4) || undefined,
+      noseBridge: getPt(168) || getPt(6) || undefined,
+      faceLeft: getPt(454) || undefined,
+      faceRight: getPt(234) || undefined
     };
   }
 
   /**
-   * Computes normalized horizontal and vertical iris ratios from eye landmarks.
+   * Computes normalized horizontal and vertical iris ratios from eye landmarks
+   * with head-pose decoupling and 1-Euro adaptive filtering.
    */
   public computeGaze(
     positions: any, 
     screenWidth: number = 1920, 
-    screenHeight: number = 1080
+    screenHeight: number = 1080,
+    timestampMs?: number
   ): GazeRatioResult | null {
     const pts = this.extractLandmarks(positions);
     if (!pts) return null;
 
-    // 1. Left Eye Ratios (Camera perspective: viewer's left eye)
+    // 1. Left Eye Ratios (Camera perspective)
     const leftWidth = Math.abs(pts.leftInner.x - pts.leftOuter.x);
     const leftHeight = Math.abs(pts.leftBottom.y - pts.leftTop.y);
     if (leftWidth < 4 || leftHeight < 2) return null;
@@ -143,7 +156,7 @@ export class IrisGazeTracker {
     const leftH = (pts.leftIris.x - Math.min(pts.leftOuter.x, pts.leftInner.x)) / leftWidth;
     const leftV = (pts.leftIris.y - Math.min(pts.leftTop.y, pts.leftBottom.y)) / leftHeight;
 
-    // 2. Right Eye Ratios (Viewer's right eye)
+    // 2. Right Eye Ratios
     const rightWidth = Math.abs(pts.rightOuter.x - pts.rightInner.x);
     const rightHeight = Math.abs(pts.rightBottom.y - pts.rightTop.y);
     if (rightWidth < 4 || rightHeight < 2) return null;
@@ -154,54 +167,79 @@ export class IrisGazeTracker {
     // 3. Combined Mean Ratios
     const rawH = (leftH + rightH) / 2;
     const rawV = (leftV + rightV) / 2;
+    this.lastRawH = rawH;
+    this.lastRawV = rawV;
 
-    // 4. Map Gaze Ratio to Screen Coordinates
-    // Horizontal: In mirrored webcam, looking screen-left moves iris in mirrored direction
-    const deltaH = (rawH - this.centerH) * this.gainX;
-    const deltaV = (rawV - this.centerV) * this.gainY;
+    // 4. Head-Pose Decoupling (compensates for head yaw & pitch)
+    let headYawOffset = 0;
+    let headPitchOffset = 0;
 
+    if (pts.noseTip && pts.faceLeft && pts.faceRight) {
+      const faceWidth = Math.abs(pts.faceLeft.x - pts.faceRight.x);
+      if (faceWidth > 20) {
+        const faceMidX = (pts.faceLeft.x + pts.faceRight.x) / 2;
+        headYawOffset = (pts.noseTip.x - faceMidX) / faceWidth;
+      }
+    }
+
+    if (pts.noseTip && pts.noseBridge) {
+      const eyeLevelY = (pts.leftInner.y + pts.rightInner.y) / 2;
+      const noseLength = Math.abs(pts.noseTip.y - pts.noseBridge.y);
+      if (noseLength > 5) {
+        headPitchOffset = (pts.noseTip.y - eyeLevelY) / (noseLength * 2.5) - 0.40;
+      }
+    }
+
+    // 5. Delta from neutral center minus head tilt
+    const deltaH = (rawH - this.centerH - headYawOffset * this.headYawWeight) * this.gainX;
+    const deltaV = (rawV - this.centerV - headPitchOffset * this.headPitchWeight) * this.gainY;
+
+    // 6. Map to Screen Coordinates
     let targetX = screenWidth * (0.5 + deltaH);
     let targetY = screenHeight * (0.5 + deltaV);
 
-    // Clamp to screen bounds
+    // Screen Boundary Clamp
     targetX = Math.max(0, Math.min(screenWidth, targetX));
     targetY = Math.max(0, Math.min(screenHeight, targetY));
 
-    // 5. Exponential Smoothing Filter
-    if (this.smoothedScreenX === null || this.smoothedScreenY === null) {
-      this.smoothedScreenX = targetX;
-      this.smoothedScreenY = targetY;
-    } else {
-      this.smoothedScreenX = this.smoothedScreenX + this.alpha * (targetX - this.smoothedScreenX);
-      this.smoothedScreenY = this.smoothedScreenY + this.alpha * (targetY - this.smoothedScreenY);
-    }
-
-    this.sampleCount++;
+    // 7. 1-Euro Adaptive Filter (smooths stationary fixation, tracks fast saccades)
+    const t = timestampMs ?? (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const filtered = this.euroFilter.filter(targetX, targetY, t);
 
     return {
       horizontal: rawH,
       vertical: rawV,
-      screenX: Math.round(this.smoothedScreenX),
-      screenY: Math.round(this.smoothedScreenY),
-      confidence: 0.92
+      screenX: Math.round(filtered.x),
+      screenY: Math.round(filtered.y),
+      confidence: 0.94
     };
   }
 
   /**
-   * Adapts center baseline whenever a known user interaction occurs (e.g. clicking or fixating)
+   * Instantly tares / zeroes the neutral forward gaze baseline to the user's current eye position.
+   */
+  public tareCenter(): void {
+    if (this.lastRawH > 0.25 && this.lastRawH < 0.75) {
+      this.centerH = this.lastRawH;
+    }
+    if (this.lastRawV > 0.25 && this.lastRawV < 0.75) {
+      this.centerV = this.lastRawV;
+    }
+    this.euroFilter.reset();
+  }
+
+  /**
+   * Softly adapts baseline toward observed neutral center
    */
   public calibrateBaseline(rawH: number, rawV: number): void {
-    if (rawH > 0.2 && rawH < 0.8 && rawV > 0.2 && rawV < 0.8) {
-      // Soft adaptation toward observed neutral center
-      this.centerH = this.centerH * 0.7 + rawH * 0.3;
-      this.centerV = this.centerV * 0.7 + rawV * 0.3;
+    if (rawH > 0.3 && rawH < 0.7 && rawV > 0.3 && rawV < 0.7) {
+      this.centerH = this.centerH * 0.85 + rawH * 0.15;
+      this.centerV = this.centerV * 0.85 + rawV * 0.15;
     }
   }
 
   public reset(): void {
-    this.smoothedScreenX = null;
-    this.smoothedScreenY = null;
-    this.sampleCount = 0;
+    this.euroFilter.reset();
   }
 }
 

@@ -66,6 +66,19 @@ export type AdaptationStrategy =
   | FoveatedZoomStrategy
   | { action: string; [key: string]: any };
 
+export interface BoundingBoxKeyframe {
+  time: number; // timestamp in seconds
+  box: BoundingBox;
+}
+
+export interface TimeSpecificContent {
+  startTime: number;
+  endTime: number;
+  label?: string;
+  textContent?: string;
+  extractedMetrics?: Record<string, string>;
+}
+
 export interface SemanticRegion {
   id: string;
   type: SemanticRegionType;
@@ -82,6 +95,12 @@ export interface SemanticRegion {
     [key: string]: any;
   };
   adaptationStrategy: AdaptationStrategy;
+
+  // Real-time temporal track extensions
+  startTime?: number; // active window start in seconds (default: 0)
+  endTime?: number;   // active window end in seconds (default: Infinity)
+  keyframes?: BoundingBoxKeyframe[]; // dynamic motion keyframes
+  timeContent?: TimeSpecificContent[]; // dynamic timestamp-based text updates
 }
 
 export interface GazePoint {

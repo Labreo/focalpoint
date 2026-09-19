@@ -66,6 +66,7 @@ export default function AdaptiveViewerPage() {
   const [inputMode, setInputMode] = useState<'EYE_TRACKER' | 'MOUSE_DEBUG'>('MOUSE_DEBUG');
   const [isCalibrated, setIsCalibrated] = useState<boolean>(false);
   const [isWebGazerActive, setIsWebGazerActive] = useState<boolean>(false);
+  const [zoomComfortLevel, setZoomComfortLevel] = useState<'GENTLE' | 'BALANCED' | 'HIGH'>('BALANCED');
 
   // Pinned Peripheral HUD regions
   const [pinnedHUDRegions, setPinnedHUDRegions] = useState<SemanticRegion[]>([]);
@@ -90,6 +91,7 @@ export default function AdaptiveViewerPage() {
   const inputModeRef = useRef<'EYE_TRACKER' | 'MOUSE_DEBUG'>(inputMode);
   const activeFocusedRegionRef = useRef<SemanticRegion | null>(null);
   const dwellProgressRef = useRef<number>(0);
+  const zoomComfortLevelRef = useRef<'GENTLE' | 'BALANCED' | 'HIGH'>(zoomComfortLevel);
 
   useEffect(() => {
     inputModeRef.current = inputMode;
@@ -102,6 +104,10 @@ export default function AdaptiveViewerPage() {
   useEffect(() => {
     dwellProgressRef.current = dwellProgress;
   }, [dwellProgress]);
+
+  useEffect(() => {
+    zoomComfortLevelRef.current = zoomComfortLevel;
+  }, [zoomComfortLevel]);
 
   // Hydrate user profile from DynamoDB on mount
   useEffect(() => {
@@ -245,9 +251,12 @@ export default function AdaptiveViewerPage() {
     // Invert zoom & translation if currently magnified so gaze at magnified entity maintains fixation
     const activeReg = activeFocusedRegionRef.current;
     if (activeReg) {
-      const targetZoom = activeReg.zoomLevel || (activeReg.type === 'ACTION_ZONE' ? 2.6 : 2.2);
-      const progress = dwellProgressRef.current >= 1.0 ? 1.0 : Math.max(0.2, dwellProgressRef.current);
-      const currentScale = 1.0 + progress * (targetZoom - 1.0);
+      const comfortScale = zoomComfortLevelRef.current === 'GENTLE' ? 1.25 : zoomComfortLevelRef.current === 'HIGH' ? 1.65 : 1.40;
+      const targetZoom = Math.min(activeReg.zoomLevel || 1.40, comfortScale);
+      const rawProgress = dwellProgressRef.current >= 1.0 ? 1.0 : Math.max(0.0, dwellProgressRef.current);
+      // Hermite cubic ease S(p) = 3p^2 - 2p^3
+      const easeP = 3 * (rawProgress ** 2) - 2 * (rawProgress ** 3);
+      const currentScale = 1.0 + easeP * (targetZoom - 1.0);
 
       if (currentScale > 1.0) {
         const box = activeReg.boundingBox;
@@ -259,8 +268,11 @@ export default function AdaptiveViewerPage() {
         const centerPixelX = rect.width / 2;
         const centerPixelY = rect.height / 2;
 
-        const deltaX = centerPixelX - targetPixelX;
-        const deltaY = centerPixelY - targetPixelY;
+        // Context-preserving fractional pan: 42% shift towards center
+        const fullDeltaX = centerPixelX - targetPixelX;
+        const fullDeltaY = centerPixelY - targetPixelY;
+        const deltaX = fullDeltaX * 0.42 * easeP;
+        const deltaY = fullDeltaY * 0.42 * easeP;
 
         const maxDeltaX = ((currentScale - 1) / 2) * rect.width;
         const maxDeltaY = ((currentScale - 1) / 2) * rect.height;
@@ -277,6 +289,13 @@ export default function AdaptiveViewerPage() {
 
     handleProcessViewportGaze(videoX, videoY, rect.width, rect.height);
   }, [handleProcessViewportGaze]);
+
+  // One-tap neutral gaze tare baseline
+  const handleTareGaze = useCallback(() => {
+    webGazerManager.tareGaze();
+    audioHaptics.playCalibrationSuccess();
+    setLastSyncReason('Neutral gaze zeroed (tare baseline recorded)');
+  }, []);
 
   // Mouse Simulation Pointer (active in MOUSE_DEBUG mode)
   const handleMouseMoveSimulate = (videoX: number, videoY: number) => {
@@ -472,11 +491,13 @@ export default function AdaptiveViewerPage() {
         handleSpeakText(activeFocusedRegion.textContent || activeFocusedRegion.label);
       } else if (e.key.toLowerCase() === 'm') {
         handleToggleInputMode();
+      } else if (e.key.toLowerCase() === 't') {
+        handleTareGaze();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFocusedRegion]);
+  }, [activeFocusedRegion, handleTareGaze]);
 
   return (
     <div className="crt bg-grid bg-fixed min-h-screen text-zinc-100 flex flex-col items-center py-6 px-3 sm:px-6">
@@ -642,6 +663,8 @@ export default function AdaptiveViewerPage() {
               kinematicState={kinematicState}
               dwellProgress={dwellProgress}
               activeFocusedRegion={activeFocusedRegion}
+              zoomComfortLevel={zoomComfortLevel}
+              onActiveRegionsUpdate={(active) => setSemanticRegions(active)}
               onRegionDwellComplete={(region) => {
                 setActiveFocusedRegion(region);
                 if (lastLockedRegionIdRef.current !== region.id) {
@@ -678,7 +701,9 @@ export default function AdaptiveViewerPage() {
                   {activeFocusedRegion ? (activeFocusedRegion.label || activeFocusedRegion.type.replace('_', ' ')) : 'Foveal Focus Ready'}
                 </span>
                 <span className="font-mono text-[11px] text-zinc-500">
-                  {activeFocusedRegion ? `${activeFocusedRegion.zoomLevel || 2.4}x Optical Push-in` : 'Direct cursor or gaze to magnify'}
+                  {activeFocusedRegion 
+                    ? `${zoomComfortLevel === 'GENTLE' ? '1.25' : zoomComfortLevel === 'HIGH' ? '1.65' : '1.40'}x Ergonomic Optical Push-in` 
+                    : 'Direct cursor or gaze to magnify'}
                 </span>
               </div>
               <p className="text-sm font-sans text-zinc-200 leading-relaxed">
@@ -720,8 +745,8 @@ export default function AdaptiveViewerPage() {
 
           {/* Quick Ergonomic Controls Toolbar */}
           <div className="w-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-4 py-2.5 text-xs font-mono">
-            {/* Left: Input Mode & Tracking Status */}
-            <div className="flex items-center gap-3">
+            {/* Left: Input Mode, Tare & Tracking Status */}
+            <div className="flex flex-wrap items-center gap-2.5">
               <div className="flex items-center rounded-lg bg-zinc-900/90 p-0.5 border border-zinc-800">
                 <button
                   onClick={() => {
@@ -753,6 +778,14 @@ export default function AdaptiveViewerPage() {
                 </button>
               </div>
 
+              <button
+                onClick={handleTareGaze}
+                className="rounded px-2.5 py-1 text-[11px] font-semibold transition border border-zinc-800 bg-zinc-900/90 text-zinc-300 hover:text-amber-300 hover:border-amber-400/50 flex items-center gap-1 cursor-pointer"
+                title="Zero eye-tracking offset to screen center (Shortcut: T)"
+              >
+                <span>🎯 Tare Gaze (T)</span>
+              </button>
+
               {inputMode === 'EYE_TRACKER' && isWebGazerActive && (
                 <span className="flex items-center gap-1 text-[11px] text-emerald-400 font-mono">
                   <span className="relative flex h-2 w-2">
@@ -770,37 +803,59 @@ export default function AdaptiveViewerPage() {
               </span>
             </div>
 
-            {/* Center: Ophthalmic Clinical Mode */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-zinc-500 text-[11px]">CLINICAL:</span>
-              <button
-                onClick={() => setSimulatorActive(p => !p)}
-                className={`rounded px-2 py-0.5 text-[11px] transition border cursor-pointer ${
-                  simulatorActive
-                    ? 'bg-amber-400 text-zinc-950 font-bold border-amber-400'
-                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                }`}
-              >
-                {simulatorActive ? '● AMD Scotoma Active' : '○ Standard View'}
-              </button>
-            </div>
+            {/* Right Group: Zoom Comfort, Clinical Mode, Contrast */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Zoom Comfort Level Selector */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-500 text-[11px]">ZOOM:</span>
+                {(['GENTLE', 'BALANCED', 'HIGH'] as const).map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => setZoomComfortLevel(level)}
+                    className={`rounded px-2 py-0.5 text-[10px] transition font-bold border cursor-pointer ${
+                      zoomComfortLevel === level
+                        ? 'border-amber-400 bg-amber-400/20 text-amber-300 font-bold'
+                        : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                    title={`Set foveal zoom to ${level === 'GENTLE' ? '1.25x' : level === 'HIGH' ? '1.65x' : '1.40x'}`}
+                  >
+                    {level === 'GENTLE' ? '1.25x' : level === 'BALANCED' ? '1.40x' : '1.65x'}
+                  </button>
+                ))}
+              </div>
 
-            {/* Right: High-Contrast Color Presets */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-zinc-500 text-[11px]">CONTRAST:</span>
-              {(['AMBER', 'CYAN', 'MINT', 'INVERT'] as ContrastPreset[]).map((preset) => (
+              {/* Center: Ophthalmic Clinical Mode */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-500 text-[11px]">CLINICAL:</span>
                 <button
-                  key={preset}
-                  onClick={() => setContrastPreset(preset)}
-                  className={`rounded px-2 py-0.5 text-[10px] transition font-bold border cursor-pointer ${
-                    contrastPreset === preset
-                      ? 'border-zinc-100 bg-zinc-100 text-zinc-950'
-                      : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                  onClick={() => setSimulatorActive(p => !p)}
+                  className={`rounded px-2 py-0.5 text-[11px] transition border cursor-pointer ${
+                    simulatorActive
+                      ? 'bg-amber-400 text-zinc-950 font-bold border-amber-400'
+                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
                   }`}
                 >
-                  {preset}
+                  {simulatorActive ? '● AMD Scotoma Active' : '○ Standard View'}
                 </button>
-              ))}
+              </div>
+
+              {/* High-Contrast Color Presets */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-500 text-[11px]">CONTRAST:</span>
+                {(['AMBER', 'CYAN', 'MINT', 'INVERT'] as ContrastPreset[]).map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => setContrastPreset(preset)}
+                    className={`rounded px-2 py-0.5 text-[10px] transition font-bold border cursor-pointer ${
+                      contrastPreset === preset
+                        ? 'border-zinc-100 bg-zinc-100 text-zinc-950'
+                        : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>

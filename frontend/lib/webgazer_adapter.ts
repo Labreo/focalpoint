@@ -147,17 +147,6 @@ class WebGazerManager {
       window.webgazer.showFaceFeedbackBox(showPreview);
       window.webgazer.showFaceOverlay(showPreview);
 
-      // Seed baseline anchor points so RidgeReg never returns null on startup
-      if (typeof window.webgazer.recordScreenPosition === 'function') {
-        const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
-        const h = typeof window !== 'undefined' ? window.innerHeight : 720;
-        window.webgazer.recordScreenPosition(w * 0.5, h * 0.5, 'click');
-        window.webgazer.recordScreenPosition(w * 0.25, h * 0.25, 'click');
-        window.webgazer.recordScreenPosition(w * 0.75, h * 0.25, 'click');
-        window.webgazer.recordScreenPosition(w * 0.25, h * 0.75, 'click');
-        window.webgazer.recordScreenPosition(w * 0.75, h * 0.75, 'click');
-      }
-
       window.webgazer.setGazeListener((data: any) => {
         if (data && data.x != null && data.y != null && !isNaN(data.x) && !isNaN(data.y)) {
           if (this.gazeCallback) {
@@ -320,6 +309,13 @@ class WebGazerManager {
         console.debug('Calibration record error:', err);
       }
     }
+  }
+
+  /**
+   * Instantly zero/tare the neutral gaze baseline
+   */
+  public tareGaze(): void {
+    irisGazeTracker.tareCenter();
   }
 
   public isCalibrated(): boolean {
