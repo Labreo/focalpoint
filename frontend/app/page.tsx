@@ -318,7 +318,16 @@ export default function AdaptiveViewerPage() {
         );
 
         if (result.regions && result.regions.length > 0) {
-          setSemanticRegions(result.regions);
+          // If user is currently focusing or dwelling, keep active focus region intact
+          setSemanticRegions(prev => {
+            if (activeFocusedRegion !== null || dwellProgress > 0) {
+              const hasActive = result.regions.some((r: SemanticRegion) => r.id === activeFocusedRegion?.id);
+              if (!hasActive && activeFocusedRegion) {
+                return [...result.regions, activeFocusedRegion];
+              }
+            }
+            return result.regions;
+          });
         }
         setAwsLatencyMs(result.processingLatencyMs || Math.round(performance.now() - t0));
         const formattedReason = triggerReason === 'SCENE_DELTA' 
@@ -336,7 +345,7 @@ export default function AdaptiveViewerPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [isAnalyzing]);
+  }, [isAnalyzing, activeFocusedRegion, dwellProgress]);
 
   // Edge-Computed Temporal Differential Ingestion Loop (1.6 FPS with Dwell Protection)
   useEffect(() => {
@@ -344,16 +353,16 @@ export default function AdaptiveViewerPage() {
 
     const interval = setInterval(() => {
       const source = activeVideoRef.current;
-      // Protect user experience: Never interrupt during active dwell accumulation or focused zoom lock!
-      if (!source || isAnalyzing || dwellProgress > 0 || activeFocusedRegion !== null) return;
+      // Protect user experience: Never interrupt during active dwell accumulation, focused zoom lock, or fixation!
+      if (!source || isAnalyzing || dwellProgress > 0 || activeFocusedRegion !== null || kinematicState === 'FIXATION') return;
 
       if (source instanceof HTMLVideoElement) {
         if (source.paused || source.ended || source.readyState < 2) return;
       }
 
-      // Enforce 5-second minimum interval between automatic cloud vision dispatches
+      // Enforce 6-second minimum interval between automatic cloud vision dispatches
       const now = performance.now();
-      if (now - lastAutoAnalysisTimeRef.current < 5000) return;
+      if (now - lastAutoAnalysisTimeRef.current < 6000) return;
 
       const evalResult = diffEngineRef.current.evaluateFrame(source);
       setLastDelta(evalResult.delta);
@@ -367,7 +376,7 @@ export default function AdaptiveViewerPage() {
     }, 600);
 
     return () => clearInterval(interval);
-  }, [autoSyncAWS, isAnalyzing, dwellProgress, activeFocusedRegion, handleTriggerAwsAnalysis]);
+  }, [autoSyncAWS, isAnalyzing, dwellProgress, activeFocusedRegion, kinematicState, handleTriggerAwsAnalysis]);
 
   // Pin & Unpin HUD widgets
   const handlePinHUD = (region: SemanticRegion) => {
@@ -452,7 +461,7 @@ export default function AdaptiveViewerPage() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           {/* Left Column: Video Stage (65% width) */}
           <div className="flex flex-col space-y-2.5 lg:col-span-8">
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-zinc-800/80 bg-black shadow-2xl">
+            <div className="relative aspect-video w-full max-h-[70vh] mx-auto overflow-hidden rounded-2xl border border-zinc-800/80 bg-black shadow-2xl">
               <AdaptiveViewport
                 videoSrc={videoSrc}
                 mediaStream={mediaStream}

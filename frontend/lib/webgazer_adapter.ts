@@ -74,11 +74,6 @@ class WebGazerManager {
     if (!loaded || typeof window === 'undefined' || !window.webgazer) return false;
 
     try {
-      // 1. Explicitly configure local absolute path for MediaPipe FaceMesh solution
-      if (window.webgazer.params) {
-        window.webgazer.params.faceMeshSolutionPath = '/mediapipe/face_mesh';
-      }
-
       // Configure ridge regression model and persistence
       window.webgazer.setRegression('ridge');
       window.webgazer.saveDataAcrossSessions(true);

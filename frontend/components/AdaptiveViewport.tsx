@@ -227,15 +227,6 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     viewportSize
   );
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (inputMode === 'MOUSE_DEBUG' && onMouseMoveSimulate && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      onMouseMoveSimulate(x, y);
-    }
-  };
-
   // Dynamic Foveated Pan-Zoom Computation
   const activeRegion = activeFocusedRegion;
   const targetZoom = activeRegion?.zoomLevel || (activeRegion?.type === 'ACTION_ZONE' ? 2.6 : 2.2);
@@ -267,6 +258,29 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     clampedDeltaY = Math.max(-maxDeltaY, Math.min(maxDeltaY, deltaY));
   }
 
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (inputMode === 'MOUSE_DEBUG' && onMouseMoveSimulate && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const rawX = e.clientX - rect.left;
+      const rawY = e.clientY - rect.top;
+
+      let videoX = rawX;
+      let videoY = rawY;
+
+      // Invert zoom & translation so pointing at a magnified element maps 1:1 to video coordinates
+      if (currentScale > 1.0) {
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        videoX = centerX + (rawX - centerX - clampedDeltaX) / currentScale;
+        videoY = centerY + (rawY - centerY - clampedDeltaY) / currentScale;
+        videoX = Math.max(0, Math.min(rect.width, videoX));
+        videoY = Math.max(0, Math.min(rect.height, videoY));
+      }
+
+      onMouseMoveSimulate(videoX, videoY);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -277,7 +291,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           onResetFocus();
         }
       }}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-black select-none shadow-2xl cursor-crosshair"
+      className="relative flex aspect-video h-full w-full items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-black select-none shadow-2xl cursor-crosshair"
       style={{
         transform: simulatorActive && (!useWebGL || !webGLActive) ? pathologyTransform.viewportTransform : undefined,
         transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)'
@@ -300,7 +314,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           loop
           muted={isMuted}
           crossOrigin="anonymous"
-          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+          className={`absolute inset-0 h-full w-full object-fill transition-opacity duration-150 ${
             useWebGL && webGLActive ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
           style={{
@@ -311,7 +325,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         {/* WebGL 2.0 / 1.0 GPU Fragment Shader Canvas */}
         <canvas
           ref={canvasRef}
-          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+          className={`absolute inset-0 h-full w-full object-fill transition-opacity duration-150 ${
             useWebGL && webGLActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         />

@@ -58,7 +58,8 @@ else:
     user_table = None
     cloudwatch_client = None
 
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+ENABLE_BEDROCK = os.environ.get("ENABLE_BEDROCK", "false").lower() in ("true", "1")
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-sonnet-4-20250514-v1:0")
 
 CORS_HEADERS = {
     "Content-Type": "application/json",
@@ -177,14 +178,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         with ThreadPoolExecutor(max_workers=3) as executor:
             fut_text = executor.submit(detect_text_lines, rekog_client, image_bytes) if rekog_client else None
             fut_faces = executor.submit(detect_faces, rekog_client, image_bytes) if rekog_client else None
-            fut_bedrock = executor.submit(classify_scene_elements, bedrock_client, image_bytes, BEDROCK_MODEL_ID) if bedrock_client else None
+            fut_bedrock = (
+                executor.submit(classify_scene_elements, bedrock_client, image_bytes, BEDROCK_MODEL_ID)
+                if (bedrock_client and ENABLE_BEDROCK)
+                else None
+            )
 
             if fut_text:
                 text_results = fut_text.result()
             if fut_faces:
                 face_results = fut_faces.result()
             if fut_bedrock:
-                hud_results = fut_bedrock.result()
+                try:
+                    hud_results = fut_bedrock.result()
+                except Exception as b_err:
+                    logger.warning("Bedrock invocation error (falling back to heuristic HUD synthesizer): %s", b_err)
+                    hud_results = []
 
         # Merge results into unified SemanticRegionMap
         synthesized_regions = merge_semantic_regions(
