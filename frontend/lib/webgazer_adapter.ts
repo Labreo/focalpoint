@@ -12,6 +12,8 @@ declare global {
   }
 }
 
+import { irisGazeTracker } from './iris_gaze_tracker';
+
 export type GazeCallback = (x: number, y: number) => void;
 
 class WebGazerManager {
@@ -67,6 +69,60 @@ class WebGazerManager {
   /**
    * Initializes WebGazer tracker and binds the continuous gaze listener
    */
+  private watchdogTimer: any = null;
+
+  /**
+   * Dispatches direct geometric iris gaze coordinates from MediaPipe FaceMesh eye landmarks
+   */
+  public dispatchIrisFallback(): boolean {
+    if (typeof window === 'undefined' || !window.webgazer) return false;
+    try {
+      const tracker = window.webgazer.getTracker ? window.webgazer.getTracker() : null;
+      if (tracker && typeof tracker.getPositions === 'function') {
+        const positions = tracker.getPositions();
+        if (positions && positions.length >= 468) {
+          const iris = irisGazeTracker.computeGaze(positions, window.innerWidth, window.innerHeight);
+          if (iris && this.gazeCallback) {
+            this.gazeCallback(iris.screenX, iris.screenY);
+            return true;
+          }
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  private startWatchdog(): void {
+    if (this.watchdogTimer) return;
+    this.watchdogTimer = setInterval(() => {
+      if (!this.isRunning || typeof window === 'undefined' || !window.webgazer) return;
+
+      // 1. Check if WebGazer has a valid prediction
+      try {
+        const pred = window.webgazer.getCurrentPrediction ? window.webgazer.getCurrentPrediction() : null;
+        if (pred && pred.x != null && pred.y != null && !isNaN(pred.x) && !isNaN(pred.y)) {
+          if (this.gazeCallback) {
+            this.gazeCallback(pred.x, pred.y);
+          }
+          return;
+        }
+      } catch {}
+
+      // 2. Fall back to Direct Iris Geometric Landmark Tracker
+      this.dispatchIrisFallback();
+    }, 33); // 30 FPS continuous gaze loop
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
+  /**
+   * Initializes WebGazer tracker and binds the continuous gaze listener
+   */
   public async start(onGaze: GazeCallback, showPreview: boolean = true): Promise<boolean> {
     this.gazeCallback = onGaze;
     this.cameraPreviewVisible = showPreview;
@@ -78,6 +134,11 @@ class WebGazerManager {
       window.webgazer.setRegression('ridge');
       window.webgazer.saveDataAcrossSessions(true);
 
+      // Automatically listen to mouse events to auto-calibrate on cursor movements
+      if (typeof window.webgazer.addMouseEventListeners === 'function') {
+        window.webgazer.addMouseEventListeners();
+      }
+
       // Disable default WebGazer prediction red dot (we render our custom Kalman reticle)
       window.webgazer.showPredictionPoints(false);
 
@@ -86,11 +147,24 @@ class WebGazerManager {
       window.webgazer.showFaceFeedbackBox(showPreview);
       window.webgazer.showFaceOverlay(showPreview);
 
-      window.webgazer.setGazeListener((data: any, elapsedTime: number) => {
+      // Seed baseline anchor points so RidgeReg never returns null on startup
+      if (typeof window.webgazer.recordScreenPosition === 'function') {
+        const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
+        const h = typeof window !== 'undefined' ? window.innerHeight : 720;
+        window.webgazer.recordScreenPosition(w * 0.5, h * 0.5, 'click');
+        window.webgazer.recordScreenPosition(w * 0.25, h * 0.25, 'click');
+        window.webgazer.recordScreenPosition(w * 0.75, h * 0.25, 'click');
+        window.webgazer.recordScreenPosition(w * 0.25, h * 0.75, 'click');
+        window.webgazer.recordScreenPosition(w * 0.75, h * 0.75, 'click');
+      }
+
+      window.webgazer.setGazeListener((data: any) => {
         if (data && data.x != null && data.y != null && !isNaN(data.x) && !isNaN(data.y)) {
           if (this.gazeCallback) {
             this.gazeCallback(data.x, data.y);
           }
+        } else {
+          this.dispatchIrisFallback();
         }
       });
 
@@ -100,6 +174,7 @@ class WebGazerManager {
           await window.webgazer.resume();
         } catch {}
         this.isRunning = true;
+        this.startWatchdog();
         if (showPreview) {
           this.styleCameraElements();
         }
@@ -108,6 +183,7 @@ class WebGazerManager {
 
       await window.webgazer.begin();
       this.isRunning = true;
+      this.startWatchdog();
 
       // Style camera preview to dock cleanly in bottom-right corner
       if (showPreview) {
@@ -117,10 +193,10 @@ class WebGazerManager {
       return true;
     } catch (err) {
       console.warn('WebGazer begin notice (checking DOM video stream status):', err);
-      // Even if begin() had a non-critical warning, check if video feed is actively streaming
       const feed = document.getElementById('webgazerVideoFeed') as HTMLVideoElement | null;
       if (feed && (feed.readyState >= 1 || feed.srcObject)) {
         this.isRunning = true;
+        this.startWatchdog();
         if (showPreview) {
           this.styleCameraElements();
         }
@@ -278,6 +354,7 @@ class WebGazerManager {
   }
 
   public pause(): void {
+    this.stopWatchdog();
     if (this.isRunning && window.webgazer) {
       try {
         window.webgazer.pause();
@@ -290,10 +367,12 @@ class WebGazerManager {
       try {
         window.webgazer.resume();
       } catch {}
+      this.startWatchdog();
     }
   }
 
   public stop(): void {
+    this.stopWatchdog();
     if (this.isRunning && window.webgazer) {
       try {
         window.webgazer.end();

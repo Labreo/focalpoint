@@ -17,9 +17,9 @@ import {
 export class KinematicIntentClassifier {
   private windowBuffer: GazePoint[] = [];
   private windowDurationMs: number = 220;
-  private maxDispersionPx: number = 65;
+  private maxDispersionPx: number = 140; // Adapted for webcam eye tracking tremor
   private dwellThresholdMs: number = 280;
-  private saccadeVelocityThresholdPxSec: number = 550; // roughly ~250-300 deg/sec on typical display
+  private saccadeVelocityThresholdPxSec: number = 650; // roughly ~250-300 deg/sec on typical display
 
   private currentState: KinematicState = 'SACCADE';
   private currentFocusedRegionId: string | null = null;
@@ -28,7 +28,7 @@ export class KinematicIntentClassifier {
 
   constructor(
     dwellThresholdMs: number = 280, 
-    maxDispersionPx: number = 65,
+    maxDispersionPx: number = 140,
     windowDurationMs: number = 220
   ) {
     this.dwellThresholdMs = dwellThresholdMs;
@@ -41,7 +41,7 @@ export class KinematicIntentClassifier {
   }
 
   public setMaxDispersion(px: number): void {
-    this.maxDispersionPx = Math.max(30, Math.min(150, px));
+    this.maxDispersionPx = Math.max(30, Math.min(250, px));
   }
 
   public reset(): void {
@@ -105,8 +105,29 @@ export class KinematicIntentClassifier {
     const distPx = Math.sqrt(Math.pow(newest.x - oldest.x, 2) + Math.pow(newest.y - oldest.y, 2));
     const velocityPxPerSec = timeDeltaSec > 0 ? distPx / timeDeltaSec : 0;
 
-    // 3. I-VDT State Decision Logic
-    const isStationary = dispersionPx <= this.maxDispersionPx;
+    // 3. Region Candidate Inspection (pre-check to allow region-bounded jitter tolerance)
+    const centroidX = (minX + maxX) / 2;
+    const centroidY = (minY + maxY) / 2;
+    const normX = viewportWidth > 0 ? centroidX / viewportWidth : 0.5;
+    const normY = viewportHeight > 0 ? centroidY / viewportHeight : 0.5;
+
+    const interactiveRegions = regions.filter(r => r.type !== 'BACKGROUND_CONTEXT');
+    const targetRegion = interactiveRegions.find(r => {
+      const b = r.boundingBox;
+      // 3.5% margin around element to tolerate bounding box edges
+      const marginX = 0.035;
+      const marginY = 0.035;
+      return (
+        normX >= b.left - marginX &&
+        normX <= b.left + b.width + marginX &&
+        normY >= b.top - marginY &&
+        normY <= b.top + b.height + marginY
+      );
+    });
+
+    // If gaze is inside an interactive component, expand dispersion tolerance by 1.6x
+    const effectiveMaxDispersion = targetRegion ? this.maxDispersionPx * 1.6 : this.maxDispersionPx;
+    const isStationary = dispersionPx <= effectiveMaxDispersion;
     const isRapidJump = velocityPxPerSec >= this.saccadeVelocityThresholdPxSec;
 
     if (!isStationary || isRapidJump) {
@@ -123,25 +144,6 @@ export class KinematicIntentClassifier {
 
     // Enter or remain in FIXATION
     this.currentState = 'FIXATION';
-    const centroidX = (minX + maxX) / 2;
-    const centroidY = (minY + maxY) / 2;
-
-    // Convert centroid to normalized coordinates
-    const normX = viewportWidth > 0 ? centroidX / viewportWidth : 0.5;
-    const normY = viewportHeight > 0 ? centroidY / viewportHeight : 0.5;
-
-    // Determine if gaze intersects any foreground semantic region
-    // Prioritize specific elements (HUD, Text, Face) over generic background
-    const interactiveRegions = regions.filter(r => r.type !== 'BACKGROUND_CONTEXT');
-    const targetRegion = interactiveRegions.find(r => {
-      const b = r.boundingBox;
-      return (
-        normX >= b.left &&
-        normX <= b.left + b.width &&
-        normY >= b.top &&
-        normY <= b.top + b.height
-      );
-    });
 
     if (targetRegion) {
       if (this.currentFocusedRegionId === targetRegion.id) {

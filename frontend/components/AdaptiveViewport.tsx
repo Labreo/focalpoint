@@ -285,7 +285,12 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     <div
       ref={containerRef}
       onPointerMove={handlePointerMove}
-      onClick={() => {
+      onClick={(e) => {
+        if (typeof window !== 'undefined' && (window as any).webgazer && typeof (window as any).webgazer.recordScreenPosition === 'function') {
+          try {
+            (window as any).webgazer.recordScreenPosition(e.clientX, e.clientY, 'click');
+          } catch {}
+        }
         // Clicking outside any region resets zoom to full overview
         if (activeRegion && onResetFocus) {
           onResetFocus();
@@ -386,6 +391,11 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
                 key={region.id}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (typeof window !== 'undefined' && (window as any).webgazer && typeof (window as any).webgazer.recordScreenPosition === 'function') {
+                    try {
+                      (window as any).webgazer.recordScreenPosition(e.clientX, e.clientY, 'click');
+                    } catch {}
+                  }
                   onRegionDwellComplete(region);
                 }}
                 className={`group pointer-events-auto absolute cursor-pointer rounded-lg border transition-all duration-150 ${borderColor} ${bgColor} ${

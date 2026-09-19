@@ -87,6 +87,21 @@ export default function AdaptiveViewerPage() {
   const lastLockedRegionIdRef = useRef<string | null>(null);
   const activeVideoRef = useRef<HTMLVideoElement | HTMLCanvasElement | null>(null);
   const viewportRectRef = useRef<DOMRect | null>(null);
+  const inputModeRef = useRef<'EYE_TRACKER' | 'MOUSE_DEBUG'>(inputMode);
+  const activeFocusedRegionRef = useRef<SemanticRegion | null>(null);
+  const dwellProgressRef = useRef<number>(0);
+
+  useEffect(() => {
+    inputModeRef.current = inputMode;
+  }, [inputMode]);
+
+  useEffect(() => {
+    activeFocusedRegionRef.current = activeFocusedRegion;
+  }, [activeFocusedRegion]);
+
+  useEffect(() => {
+    dwellProgressRef.current = dwellProgress;
+  }, [dwellProgress]);
 
   // Hydrate user profile from DynamoDB on mount
   useEffect(() => {
@@ -197,6 +212,8 @@ export default function AdaptiveViewerPage() {
     setKinematicState(classification.state);
     setDwellProgress(classification.dwellProgress);
     setActiveFocusedRegion(classification.activeRegion);
+    activeFocusedRegionRef.current = classification.activeRegion;
+    dwellProgressRef.current = classification.dwellProgress;
 
     // 3. Trigger Lock Chime ONLY ONCE on dwell completion (prevent continuous 880Hz audio drone!)
     if (classification.dwellProgress >= 1.0 && classification.activeRegion) {
@@ -219,14 +236,51 @@ export default function AdaptiveViewerPage() {
       return;
     }
 
-    const videoX = Math.max(0, Math.min(rect.width, screenX - rect.left));
-    const videoY = Math.max(0, Math.min(rect.height, screenY - rect.top));
+    const rawX = Math.max(0, Math.min(rect.width, screenX - rect.left));
+    const rawY = Math.max(0, Math.min(rect.height, screenY - rect.top));
+
+    let videoX = rawX;
+    let videoY = rawY;
+
+    // Invert zoom & translation if currently magnified so gaze at magnified entity maintains fixation
+    const activeReg = activeFocusedRegionRef.current;
+    if (activeReg) {
+      const targetZoom = activeReg.zoomLevel || (activeReg.type === 'ACTION_ZONE' ? 2.6 : 2.2);
+      const progress = dwellProgressRef.current >= 1.0 ? 1.0 : Math.max(0.2, dwellProgressRef.current);
+      const currentScale = 1.0 + progress * (targetZoom - 1.0);
+
+      if (currentScale > 1.0) {
+        const box = activeReg.boundingBox;
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+
+        const targetPixelX = cx * rect.width;
+        const targetPixelY = cy * rect.height;
+        const centerPixelX = rect.width / 2;
+        const centerPixelY = rect.height / 2;
+
+        const deltaX = centerPixelX - targetPixelX;
+        const deltaY = centerPixelY - targetPixelY;
+
+        const maxDeltaX = ((currentScale - 1) / 2) * rect.width;
+        const maxDeltaY = ((currentScale - 1) / 2) * rect.height;
+
+        const clampedDeltaX = Math.max(-maxDeltaX, Math.min(maxDeltaX, deltaX));
+        const clampedDeltaY = Math.max(-maxDeltaY, Math.min(maxDeltaY, deltaY));
+
+        videoX = centerPixelX + (rawX - centerPixelX - clampedDeltaX) / currentScale;
+        videoY = centerPixelY + (rawY - centerPixelY - clampedDeltaY) / currentScale;
+        videoX = Math.max(0, Math.min(rect.width, videoX));
+        videoY = Math.max(0, Math.min(rect.height, videoY));
+      }
+    }
+
     handleProcessViewportGaze(videoX, videoY, rect.width, rect.height);
   }, [handleProcessViewportGaze]);
 
   // Mouse Simulation Pointer (active in MOUSE_DEBUG mode)
   const handleMouseMoveSimulate = (videoX: number, videoY: number) => {
-    if (inputMode !== 'MOUSE_DEBUG') return;
+    if (inputModeRef.current !== 'MOUSE_DEBUG') return;
     const rect = viewportRectRef.current;
     const w = rect ? rect.width : (typeof window !== 'undefined' ? window.innerWidth : 1280);
     const h = rect ? rect.height : (typeof window !== 'undefined' ? window.innerHeight : 720);
@@ -238,13 +292,14 @@ export default function AdaptiveViewerPage() {
   const handleToggleWebGazer = async () => {
     if (isWebGazerActive) {
       webGazerManager.pause();
+      webGazerManager.showCameraPreview(false);
       setIsWebGazerActive(false);
     } else {
       try {
         const initialized = await webGazerManager.init();
         if (initialized) {
           const started = await webGazerManager.start((screenX, screenY) => {
-            if (inputMode === 'EYE_TRACKER') {
+            if (inputModeRef.current === 'EYE_TRACKER') {
               setRawGaze({ x: screenX, y: screenY });
               handleProcessScreenGaze(screenX, screenY);
             }
@@ -262,11 +317,21 @@ export default function AdaptiveViewerPage() {
     }
   };
 
-  const handleToggleInputMode = () => {
+  const handleToggleInputMode = async () => {
     const nextMode = inputMode === 'EYE_TRACKER' ? 'MOUSE_DEBUG' : 'EYE_TRACKER';
+    inputModeRef.current = nextMode;
     setInputMode(nextMode);
-    if (nextMode === 'EYE_TRACKER' && !isWebGazerActive) {
-      handleToggleWebGazer();
+    if (nextMode === 'EYE_TRACKER') {
+      if (!isWebGazerActive) {
+        await handleToggleWebGazer();
+      } else {
+        webGazerManager.resume();
+        webGazerManager.showCameraPreview(true);
+        webGazerManager.styleCameraElements();
+      }
+    } else {
+      webGazerManager.showCameraPreview(false);
+      webGazerManager.pause();
     }
   };
 
@@ -656,31 +721,49 @@ export default function AdaptiveViewerPage() {
           {/* Quick Ergonomic Controls Toolbar */}
           <div className="w-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-4 py-2.5 text-xs font-mono">
             {/* Left: Input Mode & Tracking Status */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={handleToggleInputMode}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition border flex items-center gap-1.5 cursor-pointer ${
-                  inputMode === 'MOUSE_DEBUG'
-                    ? 'bg-sky-400/15 text-sky-300 border-sky-400/40'
-                    : isWebGazerActive
-                      ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/40'
-                      : 'bg-amber-400/15 text-amber-300 border-amber-400/40'
-                }`}
-              >
-                {inputMode === 'MOUSE_DEBUG' ? (
-                  <>
-                    <Crosshair className="size-3 text-sky-400" />
-                    <span>🖱️ Assistive Cursor</span>
-                  </>
-                ) : (
-                  <>
-                    <Eye className="size-3 text-emerald-400" />
-                    <span>👁️ Webcam Iris ({isWebGazerActive ? 'Active' : 'Off'})</span>
-                  </>
-                )}
-              </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center rounded-lg bg-zinc-900/90 p-0.5 border border-zinc-800">
+                <button
+                  onClick={() => {
+                    if (inputMode !== 'MOUSE_DEBUG') handleToggleInputMode();
+                  }}
+                  className={`rounded px-2.5 py-1 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                    inputMode === 'MOUSE_DEBUG'
+                      ? 'bg-sky-500 text-zinc-950 shadow-sm font-bold'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  title="Control gaze reticle using mouse / trackpad cursor"
+                >
+                  <Crosshair className="size-3" />
+                  <span>🖱️ Assistive Cursor</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (inputMode !== 'EYE_TRACKER') handleToggleInputMode();
+                  }}
+                  className={`rounded px-2.5 py-1 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+                    inputMode === 'EYE_TRACKER'
+                      ? 'bg-emerald-400 text-zinc-950 font-bold shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  title="Control gaze reticle using real-time webcam iris tracking"
+                >
+                  <Eye className="size-3" />
+                  <span>👁️ Webcam Iris {isWebGazerActive ? '(Live)' : '(Click to Start)'}</span>
+                </button>
+              </div>
 
-              <span className="text-zinc-500">|</span>
+              {inputMode === 'EYE_TRACKER' && isWebGazerActive && (
+                <span className="flex items-center gap-1 text-[11px] text-emerald-400 font-mono">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>Iris Active</span>
+                </span>
+              )}
+
+              <span className="text-zinc-600">|</span>
 
               <span className="text-zinc-400 text-[11px]">
                 Dwell: <strong className="text-amber-400">{Math.round(dwellProgress * 100)}%</strong>
