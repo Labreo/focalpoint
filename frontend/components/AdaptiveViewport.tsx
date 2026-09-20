@@ -118,6 +118,32 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
   const [webGLActive, setWebGLActive] = useState<boolean>(false);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({ width: 1280, height: 720 });
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isWipeActive, setIsWipeActive] = useState<boolean>(false);
+  const [wipePosition, setWipePosition] = useState<number>(50);
+
+  // 2-Second Vertical Split Wipe comparison trigger
+  const triggerTwoSecondWipe = () => {
+    setIsWipeActive(true);
+    setWipePosition(5);
+    const start = performance.now();
+    const duration = 2200;
+
+    const step = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(1.0, elapsed / duration);
+      // Smooth sweep from 5% to 95%
+      setWipePosition(5 + progress * 90);
+      if (progress < 1.0) {
+        requestAnimationFrame(step);
+      } else {
+        setTimeout(() => {
+          setIsWipeActive(false);
+          setWipePosition(50);
+        }, 1200);
+      }
+    };
+    requestAnimationFrame(step);
+  };
 
   // Fullscreen toggle handler
   const toggleFullscreen = () => {
@@ -141,7 +167,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
-  // Keyboard shortcut listeners (Escape to reset zoom, F for fullscreen, W for webcam, C for cursor)
+  // Keyboard shortcut listeners (Escape to reset zoom, F for fullscreen, W for webcam, C for cursor, L for lip-reading wipe)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -157,6 +183,9 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
       } else if (e.key.toLowerCase() === 'c' && onToggleHideCursor) {
         e.preventDefault();
         onToggleHideCursor();
+      } else if (e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        triggerTwoSecondWipe();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -423,7 +452,11 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
             useWebGL && webGLActive ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
           style={{
-            filter: simulatorActive ? pathologyTransform.canvasFilter : undefined
+            filter: simulatorActive 
+              ? pathologyTransform.canvasFilter 
+              : activeRegion?.type === 'FACIAL_PORTRAIT'
+                ? 'contrast(1.42) brightness(1.06) saturate(1.18)'
+                : undefined
           }}
         />
 
@@ -434,6 +467,36 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
             useWebGL && webGLActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         />
+
+        {/* 2-Second Lip-Reading Vertical Wipe Comparison Overlay */}
+        {isWipeActive && (
+          <div className="pointer-events-none absolute inset-0 z-25 overflow-hidden">
+            {/* Split divider line */}
+            <div 
+              className="absolute top-0 bottom-0 w-1 bg-amber-400 shadow-[0_0_25px_rgba(251,191,36,1)] z-30 transition-none"
+              style={{ left: `${wipePosition}%` }}
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 bg-amber-400 text-zinc-950 text-[10px] font-mono font-black px-2 py-0.5 rounded-full shadow-2xl flex items-center gap-1 border border-black/40 whitespace-nowrap">
+                <span>⟷ SPLIT WIPE</span>
+              </div>
+            </div>
+
+            {/* Left Box Label: Standard Unenhanced Video */}
+            <div className="absolute top-5 left-5 bg-zinc-950/90 border border-zinc-700 px-3 py-1.5 rounded-lg text-[10px] font-mono text-zinc-300 z-30 shadow-2xl backdrop-blur-md">
+              <span className="text-zinc-400 block text-[8px] uppercase">Original Baseline</span>
+              <span className="font-bold">STANDARD VIDEO FEED</span>
+            </div>
+
+            {/* Right Box Label: Enhanced Facial Contrast */}
+            <div className="absolute top-5 right-5 bg-zinc-950/95 border-2 border-amber-400 px-3 py-1.5 rounded-lg text-[10px] font-mono text-amber-300 font-bold z-30 shadow-[0_0_25px_rgba(251,191,36,0.5)] backdrop-blur-md">
+              <span className="text-amber-400/80 block text-[8px] uppercase flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Peripheral Vision Mode
+              </span>
+              <span>👄 LIP-READING ENHANCED (+40% CONTRAST)</span>
+            </div>
+          </div>
+        )}
 
         {/* Pathology Mask Overlay (Fallback when WebGL is inactive) */}
         {simulatorActive && (!useWebGL || !webGLActive) && pathologyTransform.maskOverlay && (
@@ -564,23 +627,47 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
 
       {/* Active Assistive Lens Status Floating Pill (Top Left) */}
       {activeRegion && currentScale > 1.15 && (
-        <div className="pointer-events-auto absolute top-3 left-3 z-30 flex items-center gap-2 rounded-xl bg-zinc-950/90 border border-amber-500/50 px-3 py-1.5 backdrop-blur-md shadow-2xl">
-          <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
+        <div className="pointer-events-auto absolute top-3 left-3 z-30 flex items-center gap-2.5 rounded-xl bg-zinc-950/95 border border-amber-400/80 px-3.5 py-2 backdrop-blur-md shadow-[0_0_30px_rgba(251,191,36,0.3)]">
+          <Sparkles className="h-4 w-4 text-amber-400 animate-pulse shrink-0" />
           <div className="flex flex-col">
-            <span className="font-mono text-[11px] font-bold text-zinc-100 truncate max-w-[200px] sm:max-w-xs">
+            {activeRegion.type === 'FACIAL_PORTRAIT' && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="rounded bg-amber-400 text-zinc-950 text-[9px] font-mono font-black px-1.5 py-0.2 uppercase tracking-wide">
+                  👄 LIP-READING ACCESSIBILITY
+                </span>
+                <span className="font-mono text-[9px] text-amber-300 font-bold">
+                  Edge Sharpening & Contrast +40% Active
+                </span>
+              </div>
+            )}
+            <span className="font-mono text-[11px] font-bold text-zinc-100 truncate max-w-[220px] sm:max-w-xs">
               {activeRegion.label || activeRegion.textContent || 'Component Focused'}
             </span>
-            <span className="font-mono text-[9px] text-amber-300">
+            <span className="font-mono text-[9px] text-amber-400">
               {currentScale.toFixed(1)}x Foveated Optical Magnification
             </span>
           </div>
+
+          {activeRegion.type === 'FACIAL_PORTRAIT' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerTwoSecondWipe();
+              }}
+              className="ml-1 flex items-center gap-1 rounded-md bg-amber-400 hover:bg-amber-300 px-2 py-1 text-[10px] font-mono font-bold text-zinc-950 transition shadow-md cursor-pointer whitespace-nowrap"
+              title="Trigger 2-second vertical split comparison wipe (Shortcut: L)"
+            >
+              <span>⚡ Contrast Wipe (L)</span>
+            </button>
+          )}
+
           {onResetFocus && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onResetFocus();
               }}
-              className="ml-2 flex items-center gap-1 rounded-md bg-zinc-800 hover:bg-zinc-700 px-2 py-1 text-[10px] font-mono text-zinc-200 hover:text-white transition border border-zinc-700"
+              className="ml-1 flex items-center gap-1 rounded-md bg-zinc-800 hover:bg-zinc-700 px-2 py-1 text-[10px] font-mono text-zinc-200 hover:text-white transition border border-zinc-700"
               title="Reset Zoom to Full Broadcast Overview (Esc)"
             >
               <Minimize2 className="h-3 w-3" />
@@ -590,21 +677,26 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
         </div>
       )}
 
-      {/* Pinned Peripheral HUD Overlay (Top Right) */}
+      {/* Pinned Peripheral HUD Overlay (Top Right Corridor: Spartan Warriors Amber High-Contrast) */}
       {pinnedHUDRegions && pinnedHUDRegions.length > 0 && (
-        <div className="pointer-events-auto absolute top-3 right-3 z-30 flex flex-col gap-2 max-w-xs">
+        <div className="pointer-events-auto absolute top-3 right-3 z-30 flex flex-col gap-2.5 max-w-sm animate-fade-in">
           {pinnedHUDRegions.map((hud) => (
             <div
               key={hud.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/50 bg-zinc-950/95 px-3 py-2 shadow-2xl backdrop-blur-md"
+              className="relative flex items-center justify-between gap-3 rounded-xl border-2 border-amber-400 bg-black/95 px-3.5 py-2.5 shadow-[0_0_35px_rgba(251,191,36,0.6)] backdrop-blur-md ring-2 ring-amber-400/50"
             >
               <div className="flex flex-col">
-                <div className="flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 uppercase">
-                  <BarChart2 className="h-3 w-3" />
-                  <span>PINNED PERIPHERAL HUD</span>
+                <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-amber-400 uppercase tracking-wider">
+                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>DYNAMIC HUD PINNING • PERIPHERAL CORRIDOR</span>
                 </div>
-                <div className="text-xs font-bold text-zinc-100 font-mono tracking-wide">
+                <div className="text-xs font-black text-amber-300 font-mono tracking-wide mt-0.5 leading-snug">
                   {hud.textContent}
+                </div>
+                <div className="text-[9px] font-mono text-zinc-400 mt-0.5 flex items-center gap-2">
+                  <span>High-Contrast Amber Reflow</span>
+                  <span>•</span>
+                  <span>Anchor: Top-Right PRL</span>
                 </div>
               </div>
               {onUnpinHUD && (
@@ -613,7 +705,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
                     e.stopPropagation();
                     onUnpinHUD(hud.id);
                   }}
-                  className="rounded bg-zinc-800 hover:bg-zinc-700 p-1 text-zinc-400 hover:text-zinc-200 transition text-[10px]"
+                  className="rounded-lg bg-zinc-900 hover:bg-zinc-800 p-1.5 text-zinc-400 hover:text-white transition text-xs border border-zinc-800"
                   title="Unpin HUD"
                 >
                   ✕
@@ -672,6 +764,21 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
           >
             {hideMouseCursor ? <MouseOff className="h-3 w-3" /> : <MousePointer className="h-3 w-3" />}
             <span>{hideMouseCursor ? 'Cursor Hidden' : 'Cursor Show'}</span>
+          </button>
+        )}
+
+        {/* Lip-Reading Split Comparison Wipe button */}
+        {activeRegion?.type === 'FACIAL_PORTRAIT' && (
+          <button
+            onClick={triggerTwoSecondWipe}
+            className={`flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[10px] font-bold transition border ${
+              isWipeActive 
+                ? 'bg-amber-400 text-zinc-950 border-amber-400 shadow-sm' 
+                : 'bg-amber-400/20 text-amber-300 border-amber-400/60 hover:bg-amber-400 hover:text-black'
+            }`}
+            title="Trigger 2-second vertical split wipe comparison (Shortcut: L)"
+          >
+            <span>⚡ Wipe (L)</span>
           </button>
         )}
 

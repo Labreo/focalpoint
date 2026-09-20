@@ -83,13 +83,13 @@ export const DEMO_SCENES: DemoScene[] = [
         startTime: 0.0,
         endTime: 20.0,
         boundingBox: { left: 0.72, top: 0.11, width: 0.25, height: 0.38 },
-        label: '👤 Dr. Werner Vogels (VP & CTO Amazon.com)',
-        textContent: 'Dr. Werner Vogels, VP & CTO at Amazon.com, presenting event-driven architecture and systems resilience',
+        label: '👤 Dr. Werner Vogels (Lip-Reading Focus)',
+        textContent: 'Dr. Werner Vogels, VP & CTO Amazon.com. Viewport tracks presenter with edge sharpening and contrast enhancement to enable users with peripheral vision loss to read lips.',
         zoomLevel: 1.35,
         isolationMode: 'SPOTLIGHT',
         adaptationStrategy: {
           action: 'SUPER_RESOLVE_AND_STABILIZE',
-          contrastBoost: 1.25,
+          contrastBoost: 1.35,
           edgeSharpen: true
         }
       },
@@ -231,8 +231,8 @@ export const DEMO_SCENES: DemoScene[] = [
         startTime: 0.0,
         endTime: 20.0,
         boundingBox: { left: 0.01, top: 0.86, width: 0.19, height: 0.12 },
-        label: '📊 Live Score: IND 1-0 (0.4 Ov)',
-        textContent: 'INDIA: 1-0 after 0.4 overs, toss won by Afghanistan',
+        label: '📊 Spartan Warriors Scoreboard: IND 1-0',
+        textContent: 'SPARTAN WARRIORS SCOREBOARD • INDIA 1-0 (0.4 Ov) | Samson 1 (3)',
         zoomLevel: 1.30,
         isolationMode: 'PERIPHERAL_DOCK',
         extractedMetrics: {
@@ -242,8 +242,8 @@ export const DEMO_SCENES: DemoScene[] = [
         },
         adaptationStrategy: {
           action: 'PIN_TO_PERIPHERY',
-          anchorCorner: 'BOTTOM_RIGHT',
-          scaleFactor: 1.35
+          anchorCorner: 'TOP_RIGHT',
+          scaleFactor: 1.40
         }
       },
       {
