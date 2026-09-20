@@ -728,7 +728,7 @@ export const AdaptiveViewport: React.FC<AdaptiveViewportProps> = ({
 
       {/* Live Webcam Picture-in-Picture Feed (Persists in Fullscreen) */}
       <WebcamPip
-        isActive={isWebcamActive}
+        isActive={isWebcamActive || inputMode === 'EYE_TRACKER'}
         onClose={onToggleWebcam}
         inputMode={inputMode}
       />

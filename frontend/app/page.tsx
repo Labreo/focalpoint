@@ -291,7 +291,7 @@ export default function AdaptiveViewerPage() {
   }, [semanticRegions]);
 
   // Screen-to-Viewport coordinate mapper for genuine webcam eye tracking
-  const handleProcessScreenGaze = useCallback((screenX: number, screenY: number) => {
+  const handleProcessScreenGaze = useCallback((screenX: number, screenY: number, normX?: number, normY?: number) => {
     const rect = viewportRectRef.current;
     if (!rect || rect.width === 0 || rect.height === 0) {
       const w = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -300,8 +300,19 @@ export default function AdaptiveViewerPage() {
       return;
     }
 
-    const rawX = Math.max(0, Math.min(rect.width, screenX - rect.left));
-    const rawY = Math.max(0, Math.min(rect.height, screenY - rect.top));
+    let rawX: number;
+    let rawY: number;
+
+    if (normX != null && normY != null) {
+      // Direct ergonomic normalized gaze mapping directly onto the video container
+      rawX = Math.max(0, Math.min(rect.width, normX * rect.width));
+      rawY = Math.max(0, Math.min(rect.height, normY * rect.height));
+    } else {
+      rawX = Math.max(0, Math.min(rect.width, screenX - rect.left));
+      rawY = Math.max(0, Math.min(rect.height, screenY - rect.top));
+    }
+
+    setRawGaze({ x: rawX, y: rawY });
 
     let videoX = rawX;
     let videoY = rawY;
@@ -369,22 +380,20 @@ export default function AdaptiveViewerPage() {
   const handleToggleWebGazer = async () => {
     if (isWebGazerActive) {
       webGazerManager.pause();
-      webGazerManager.showCameraPreview(false);
       setIsWebGazerActive(false);
     } else {
       try {
         const initialized = await webGazerManager.init();
         if (initialized) {
-          const started = await webGazerManager.start((screenX, screenY) => {
+          const started = await webGazerManager.start((screenX, screenY, normX, normY) => {
             if (inputModeRef.current === 'EYE_TRACKER') {
-              setRawGaze({ x: screenX, y: screenY });
-              handleProcessScreenGaze(screenX, screenY);
+              handleProcessScreenGaze(screenX, screenY, normX, normY);
             }
-          }, true);
+          }, false);
           if (started) {
             setIsWebGazerActive(true);
-            webGazerManager.showCameraPreview(true);
-            webGazerManager.styleCameraElements();
+            setIsWebcamActive(true);
+            webGazerManager.hideOffscreenContainer();
           }
         }
       } catch (err) {
@@ -410,15 +419,14 @@ export default function AdaptiveViewerPage() {
     }, 3000);
 
     if (nextMode === 'EYE_TRACKER') {
+      setIsWebcamActive(true);
       if (!isWebGazerActive) {
         await handleToggleWebGazer();
       } else {
         webGazerManager.resume();
-        webGazerManager.showCameraPreview(true);
-        webGazerManager.styleCameraElements();
+        webGazerManager.hideOffscreenContainer();
       }
     } else {
-      webGazerManager.showCameraPreview(false);
       webGazerManager.pause();
     }
   };
@@ -583,7 +591,7 @@ export default function AdaptiveViewerPage() {
       } else if (e.key === ' ' && activeFocusedRegion) {
         e.preventDefault();
         handleSpeakText(activeFocusedRegion.textContent || activeFocusedRegion.label);
-      } else if (e.key.toLowerCase() === 'm') {
+      } else if (e.key.toLowerCase() === 'm' || e.key.toLowerCase() === 'e') {
         handleToggleInputMode();
       } else if (e.key.toLowerCase() === 't') {
         handleTareGaze();

@@ -12,15 +12,16 @@ declare global {
   }
 }
 
-import { irisGazeTracker } from './iris_gaze_tracker';
+import { irisGazeTracker, GazeRatioResult } from './iris_gaze_tracker';
 
-export type GazeCallback = (x: number, y: number) => void;
+export type GazeCallback = (x: number, y: number, normX?: number, normY?: number) => void;
 
 class WebGazerManager {
   private isLoaded: boolean = false;
   private isRunning: boolean = false;
   private gazeCallback: GazeCallback | null = null;
   private cameraPreviewVisible: boolean = true;
+  private watchdogTimer: any = null;
 
   /**
    * Dynamically injects WebGazer.js from local bundle if not present in window
@@ -67,9 +68,77 @@ class WebGazerManager {
   }
 
   /**
-   * Initializes WebGazer tracker and binds the continuous gaze listener
+   * Draws real-time visual iris tracking indicators on the webcam canvas overlay
    */
-  private watchdogTimer: any = null;
+  private drawIrisOverlay(irisResult: GazeRatioResult): void {
+    if (typeof document === 'undefined') return;
+    const overlay = document.getElementById('webgazerFaceOverlay') as HTMLCanvasElement | null;
+    const feed = document.getElementById('webgazerVideoFeed') as HTMLVideoElement | null;
+    if (!overlay || !feed || !feed.videoWidth || !feed.videoHeight) return;
+
+    if (overlay.width !== feed.videoWidth) overlay.width = feed.videoWidth;
+    if (overlay.height !== feed.videoHeight) overlay.height = feed.videoHeight;
+
+    const ctx = overlay.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    const lm = irisResult.landmarks;
+    if (lm) {
+      // Draw Right Iris (Subject's right / viewer's left in selfie mirror)
+      ctx.beginPath();
+      ctx.arc(lm.rightIris.x, lm.rightIris.y, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = '#F59E0B'; // Amber
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Draw Left Iris (Subject's left / viewer's right in selfie mirror)
+      ctx.beginPath();
+      ctx.arc(lm.leftIris.x, lm.leftIris.y, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = '#06B6D4'; // Cyan
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Draw eye contour outlines
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)';
+      ctx.lineWidth = 1;
+
+      // Right eye: outer -> top -> inner -> bottom -> outer
+      ctx.beginPath();
+      ctx.moveTo(lm.rightOuter.x, lm.rightOuter.y);
+      ctx.lineTo(lm.rightTop.x, lm.rightTop.y);
+      ctx.lineTo(lm.rightInner.x, lm.rightInner.y);
+      ctx.lineTo(lm.rightBottom.x, lm.rightBottom.y);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Left eye: inner -> top -> outer -> bottom -> inner
+      ctx.beginPath();
+      ctx.moveTo(lm.leftInner.x, lm.leftInner.y);
+      ctx.lineTo(lm.leftTop.x, lm.leftTop.y);
+      ctx.lineTo(lm.leftOuter.x, lm.leftOuter.y);
+      ctx.lineTo(lm.leftBottom.x, lm.leftBottom.y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    // Top HUD Telemetry Bar on video preview
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, overlay.width, 22);
+
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = irisResult.isRefinedIris ? '#10B981' : '#F59E0B';
+    const tag = irisResult.isRefinedIris ? '● IRIS 468/473 LIVE' : '● PUPIL TRACK LIVE';
+    ctx.fillText(tag, 6, 15);
+
+    ctx.fillStyle = '#E4E4E7';
+    ctx.fillText(`${irisResult.screenX}, ${irisResult.screenY}`, overlay.width - 80, 15);
+  }
 
   /**
    * Dispatches direct geometric iris gaze coordinates from MediaPipe FaceMesh eye landmarks
@@ -83,7 +152,8 @@ class WebGazerManager {
         if (positions && positions.length >= 468) {
           const iris = irisGazeTracker.computeGaze(positions, window.innerWidth, window.innerHeight);
           if (iris && this.gazeCallback) {
-            this.gazeCallback(iris.screenX, iris.screenY);
+            this.gazeCallback(iris.screenX, iris.screenY, iris.normalizedX, iris.normalizedY);
+            this.drawIrisOverlay(iris);
             return true;
           }
         }
@@ -97,19 +167,20 @@ class WebGazerManager {
     this.watchdogTimer = setInterval(() => {
       if (!this.isRunning || typeof window === 'undefined' || !window.webgazer) return;
 
-      // 1. Check if WebGazer has a valid prediction
-      try {
-        const pred = window.webgazer.getCurrentPrediction ? window.webgazer.getCurrentPrediction() : null;
-        if (pred && pred.x != null && pred.y != null && !isNaN(pred.x) && !isNaN(pred.y)) {
-          if (this.gazeCallback) {
-            this.gazeCallback(pred.x, pred.y);
+      // Prioritize Direct Iris Geometric Landmark Tracker (reliable 30 FPS without manual click calibration)
+      const dispatched = this.dispatchIrisFallback();
+      if (!dispatched) {
+        try {
+          const pred = window.webgazer.getCurrentPrediction ? window.webgazer.getCurrentPrediction() : null;
+          if (pred && pred.x != null && pred.y != null && !isNaN(pred.x) && !isNaN(pred.y)) {
+            if (this.gazeCallback) {
+              const normX = typeof window !== 'undefined' && window.innerWidth > 0 ? pred.x / window.innerWidth : 0.5;
+              const normY = typeof window !== 'undefined' && window.innerHeight > 0 ? pred.y / window.innerHeight : 0.5;
+              this.gazeCallback(pred.x, pred.y, normX, normY);
+            }
           }
-          return;
-        }
-      } catch {}
-
-      // 2. Fall back to Direct Iris Geometric Landmark Tracker
-      this.dispatchIrisFallback();
+        } catch {}
+      }
     }, 33); // 30 FPS continuous gaze loop
   }
 
@@ -143,16 +214,20 @@ class WebGazerManager {
       window.webgazer.showPredictionPoints(false);
 
       // Enable or disable face and camera preview
-      window.webgazer.showVideoPreview(showPreview);
+      window.webgazer.showVideoPreview(true);
       window.webgazer.showFaceFeedbackBox(showPreview);
       window.webgazer.showFaceOverlay(showPreview);
 
       window.webgazer.setGazeListener((data: any) => {
-        if (data && data.x != null && data.y != null && !isNaN(data.x) && !isNaN(data.y)) {
+        // If user is calibrated and ridge regression produces valid prediction, use it
+        if (data && data.x != null && data.y != null && !isNaN(data.x) && !isNaN(data.y) && this.isCalibrated()) {
           if (this.gazeCallback) {
-            this.gazeCallback(data.x, data.y);
+            const normX = typeof window !== 'undefined' && window.innerWidth > 0 ? data.x / window.innerWidth : 0.5;
+            const normY = typeof window !== 'undefined' && window.innerHeight > 0 ? data.y / window.innerHeight : 0.5;
+            this.gazeCallback(data.x, data.y, normX, normY);
           }
         } else {
+          // Direct real-time 3D Iris geometric gaze tracking
           this.dispatchIrisFallback();
         }
       });
@@ -166,6 +241,8 @@ class WebGazerManager {
         this.startWatchdog();
         if (showPreview) {
           this.styleCameraElements();
+        } else {
+          this.hideOffscreenContainer();
         }
         return true;
       }
@@ -174,9 +251,11 @@ class WebGazerManager {
       this.isRunning = true;
       this.startWatchdog();
 
-      // Style camera preview to dock cleanly in bottom-right corner
+      // Style camera preview or position off-screen
       if (showPreview) {
         this.styleCameraElements();
+      } else {
+        this.hideOffscreenContainer();
       }
 
       return true;
@@ -188,11 +267,39 @@ class WebGazerManager {
         this.startWatchdog();
         if (showPreview) {
           this.styleCameraElements();
+        } else {
+          this.hideOffscreenContainer();
         }
         return true;
       }
       return false;
     }
+  }
+
+  /**
+   * Hides the raw WebGazer container off-screen while keeping stream processing active at full 30 FPS
+   */
+  public hideOffscreenContainer(): void {
+    if (typeof window === 'undefined') return;
+    const apply = () => {
+      const container = document.getElementById('webgazerVideoContainer');
+      const dot = document.getElementById('webgazerGazeDot');
+      if (dot) dot.style.display = 'none';
+      if (container) {
+        container.style.setProperty('position', 'fixed', 'important');
+        container.style.setProperty('top', '-9999px', 'important');
+        container.style.setProperty('left', '-9999px', 'important');
+        container.style.setProperty('width', '320px', 'important');
+        container.style.setProperty('height', '240px', 'important');
+        container.style.setProperty('opacity', '0', 'important');
+        container.style.setProperty('pointer-events', 'none', 'important');
+        container.style.setProperty('z-index', '-1', 'important');
+      }
+    };
+    apply();
+    setTimeout(apply, 80);
+    setTimeout(apply, 300);
+    setTimeout(apply, 800);
   }
 
   /**
