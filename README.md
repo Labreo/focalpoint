@@ -5,12 +5,14 @@
 > **Target Tracks**: **Track 1: "Ship It"** (Grand Prize Contender — ₹2,00,000 + $3,000 AWS Credits) & **"Best UI"** (Third Prize — ₹1,00,000 + $1,000 AWS Credits)  
 > **Enterprise Pipeline**: Fast-track Interview Contender for **Amazon** (6-Month Internship & Full-Time SWE Roles)  
 > **Live Web Application (AWS Amplify)**: [https://main.d1s5otc6zch586.amplifyapp.com](https://main.d1s5otc6zch586.amplifyapp.com)  
+> **3-Minute Video Demo (YouTube)**: [https://youtu.be/5wL_rEeT5RM](https://youtu.be/5wL_rEeT5RM)  
 > **Live AWS API Gateway**: `https://xxeqb4odra.execute-api.us-east-1.amazonaws.com/prod`  
 > **GitHub Repository**: [https://github.com/Labreo/focalpoint](https://github.com/Labreo/focalpoint)  
 > **Lead Architect**: Kanak Sanjay Waradkar ([@Labreo](https://github.com/Labreo))  
 
 ---
 
+[![FocalPoint 3-Minute Demo Video](https://img.shields.io/badge/YouTube-3--Minute_Demo_Walkthrough-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/5wL_rEeT5RM)
 ![FocalPoint Hero Banner](https://img.shields.io/badge/AWS_Amplify-Live_Production-FF9900?style=for-the-badge&logo=awsamplify&logoColor=white)
 ![Next.js 15](https://img.shields.io/badge/Next.js_15-App_Router-000000?style=for-the-badge&logo=next.js&logoColor=white)
 ![React 19](https://img.shields.io/badge/React_19-Fast_Refresh-61DAFB?style=for-the-badge&logo=react&logoColor=black)
